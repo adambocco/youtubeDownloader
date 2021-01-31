@@ -44,6 +44,10 @@ class App(Frame):
         self.playlistRangeVar.set(0)
         self.cutVar = IntVar()
         self.cutVar.set(0)
+        self.addMdTagsVar = IntVar()
+        self.addMdTagsVar.set(1)
+        self.addTitleTagsVar = IntVar()
+        self.addTitleTagsVar.set(1)
         self.playlistLowerRangeVar = StringVar()
         self.playlistLowerRangeVar.set('1')
         self.playlistUpperRangeVar = StringVar()
@@ -141,6 +145,19 @@ class App(Frame):
 
         self.cutUpperRangeEntry = Entry(self.optionsFrame2, textvariable=self.cutUpperVar, width=4)
         self.cutUpperRangeEntry.grid(column=3, row=2)
+
+
+
+        self.optionsFrame3 = Frame(self.controlFrame, padx=5, pady=5, bg=bgColor)
+        self.optionsFrame3.grid(padx=5, pady=5, row=1, rowspan=5, column = 9, columnspan=3)
+
+        self.addMdTags = Checkbutton(self.optionsFrame3, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=bgColor)
+        self.addMdTags.grid(column=1, columnspan=3, row=1,rowspan=2, pady=10)
+
+        self.addTitleTags = Checkbutton(self.optionsFrame3, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=bgColor)
+        self.addTitleTags.grid(column=1, columnspan=3, row=4,rowspan=2, pady=10)
+
+
 
 
         self.urlEntry = Entry(self.controlFrame, textvariable = self.urlVar,font=('Arial', 12), width=50)
@@ -494,12 +511,19 @@ class App(Frame):
             yt = None
             try:
                 yt = pytube.YouTube(j)
-            except pytube.exceptions.VideoUnavailable:
+            except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError):
                 print('Video is unavailable at:::'+j)
+                continue
+            except pytube.exceptions.VideoPrivate:
+                print('Video is private at:::'+j)
+                continue
+            except KeyError:
+                print('Video has been deleted at:::'+j)
                 continue
             stream = yt.streams.filter(only_audio=(not includeVideo)).first()
             md = ''
             tl = []
+            alreadyAddedTitleTags = False
             try:
                 md = [*yt.metadata][0]
                 for g in [*md]:
@@ -509,8 +533,15 @@ class App(Frame):
                         print([self.mdToTag[g], md[g]])
             except IndexError:
                 print('no metadata')
+                if len(yt.title.split('-')) >1 and self.addTitleTagsVar.get():
+                    tl.append(['Title', yt.title.split('-')[1]])
+                    tl.append(['Contributing Artists',yt.title.split('-')[0]])
+                    alreadyAddedTitleTags = True
                 pass
-            self.urls[j] = {'includeVideo':includeVideo, 'yt':yt,'stream': stream, 'name':stream.default_filename[:-4], 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tl, 'metadata':md, 'cut':False}
+            # if self.addTitleTagsVar.get() and not alreadyAddedTitleTags and len(yt.title.split('-')) > 1:
+            #     tl.append(['Title', yt.title.split('-')[1]])
+            #     tl.append(['Contributing Artists',yt.title.split('-')[0]])
+            self.urls[j] = {'includeVideo':includeVideo, 'yt':yt,'stream': stream, 'name':yt.title, 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tl, 'metadata':md, 'cut':False}
             mediaTag = None
             if includeVideo:
                 self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
@@ -562,21 +593,32 @@ class App(Frame):
             self.statusVar.set('Failed to fetch video')
             self.statusLabel['fg'] = "red"
             return
-        if len(yt.streams)==0: 
-            print("NO STREAMS AVAILABLE") # TODO alert the user
+        except pytube.exceptions.VideoPrivate:
+            print('Video is private at:::'+j)
+            return
+        except KeyError:
+            print('Video has been deleted at:::'+j)
+            return
         stream = yt.streams.filter(only_audio=(not includeVideo)).first()
         md = ''
         tl = []
-        try:
-            md = [*yt.metadata][0]
-            for g in [*md]:
-                print("Is " + g + " in : ", [*self.mdToTag])
-                if g in [*self.mdToTag]:
-                    tl.append([self.mdToTag[g], md[g]])
-                    print([self.mdToTag[g], md[g]])
-        except IndexError:
-           print('no metadata')
-           pass
+        alreadyAddedTitleTags = False
+        if self.addMdTags:
+            try:
+                md = [*yt.metadata][0]
+                for g in [*md]:
+                    if g in [*self.mdToTag]:
+                        tl.append([self.mdToTag[g], md[g]])
+            except IndexError:
+                print('no metadata')
+                if len(yt.title.split('-')) >1 and self.addTitleTagsVar.get():
+                    tl.append(['Title', yt.title.split('-')[1]])
+                    tl.append(['Contributing Artists',yt.title.split('-')[0]])
+                    alreadyAddedTitleTags = True
+                pass
+        # if self.addTitleTagsVar.get() and not alreadyAddedTitleTags and len(yt.title.split('-')) > 1:
+        #     tl.append(['Title', yt.title.split('-')[1]])
+        #     tl.append(['Contributing Artists',yt.title.split('-')[0]])
         cutRange = False
         if self.cutVar.get():
             cutRange = self.makeCut(inputUrl, yt.length)
@@ -632,20 +674,22 @@ class App(Frame):
                     y=y.subclip(low,high)
                     y.write_videofile(finalPath)                                                        # Save as final path name
                     y.close()
+                    os.remove(tempPath)
                 continue
-            self.urls[u]['stream'].download(output_path=directory, filename=self.urls[u]['name'])
+            dlReturn = self.urls[u]['stream'].download(output_path=directory, filename=self.urls[u]['name'])
             print("CREATING SONG")
+            print("DL Title", dlReturn.title())
             fn = self.urls[u]['name']+'.mp4'
             full_path = os.path.join(directory, fn)
-            output_path = os.path.join(directory, os.path.splitext(fn)[0] + '.mp3')
-            clip = AudioFileClip(full_path)   
+            output_path = dlReturn[:-1]+"3"
+            clip = AudioFileClip(dlReturn)   
             if self.urls[u]['cut']:
                 low = self.urls[u]['lowCut']
                 high = self.urls[u]['highCut']
                 clip = clip.subclip(low,high)
             clip.write_audiofile(output_path,bitrate="320k")
             clip.close()
-            os.remove(os.path.join(directory, fn))
+            os.remove(dlReturn)
             if len(self.urls[u]['tagList']) != 0:                           # Try to match metadata with mp3 tags to add to output files
                 newAudioFile = eyed3.load(output_path)
                 print(output_path)
