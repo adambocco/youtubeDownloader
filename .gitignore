@@ -4,3 +4,7 @@ youtubeSongs
 env
 .dist
 __pycache__
+dist
+build
+dlyt.spec
+test.py

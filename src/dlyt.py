@@ -1,4 +1,3 @@
-
 import os, sys, time
 from moviepy.editor import AudioFileClip
 from moviepy.editor import VideoFileClip
@@ -11,7 +10,7 @@ from PIL import Image, ImageTk
 from io import BytesIO
 import requests
 
-bgColor = "#eeeeFa"
+import helpers
 
 class App(Frame):
     def __init__(self, master=None):
@@ -19,18 +18,20 @@ class App(Frame):
         self.master = master
         self.pack()
         self.urls = {}                                                                                              # Holds data from YouTube, references to widgets representing that data, and tags
-        self['bg'] = bgColor
+        self.bg = "#eeeeFa"
         self.tagOptions = ['Title', 'Contributing Artists', 'Album', 'Album Artist', 'Year', 'Track Number']        # Options for tags optionmenu
-        self.mdToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}                        # Maps youtube metadata to mp3 header tag name
+        self.mdToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}   # Maps youtube metadata to mp3 header tag name
 
         self.urlVar = StringVar()                                                                                   # textvariable for url entry
-        self.urlVar.set("Enter the YouTube URL of a video or playlist") 
+        self.urlVar.set("Enter the YouTube URL of a video or playlist")
+
         self.nameChangeVar = StringVar() 
-        self.urlListVar = [];                                                                           # textvariable for name change entry 
-        self.listVar = Variable(value=self.urlListVar)                                                                                  # listvariable for urls added listbox
-        self.audioCountVar = StringVar()                                                                                 # textvariable for count of songs added label
+        self.urlListVar = [];                                                                                       # textvariable for name change entry 
+
+        self.listVar = Variable(value=self.urlListVar)                                                              # listvariable for urls added listbox
+        self.audioCountVar = StringVar()                                                                            # textvariable for count of songs added label
         self.audioCountVar.set('Audio: 0')
-        self.videoCountVar = StringVar()                                                                                 # textvariable for count of songs added label
+        self.videoCountVar = StringVar()                                                                            # textvariable for count of songs added label
         self.videoCountVar.set('Video: 0')
         self.statusVar = StringVar()
         self.statusVar.set('')
@@ -38,6 +39,7 @@ class App(Frame):
         self.tagChangeVar.set('Enter tag descriptor')
         self.tagVar = StringVar()                                                                                   # textvariable for dropdown list of songs
         self.tagVar.set(self.tagOptions[0])
+
         self.deleteOnDownloadVar = IntVar()
         self.deleteOnDownloadVar.set(0)
         self.playlistRangeVar = IntVar()
@@ -52,6 +54,7 @@ class App(Frame):
         self.playlistLowerRangeVar.set('1')
         self.playlistUpperRangeVar = StringVar()
         self.playlistUpperRangeVar.set('10')
+
         self.cutLowerVar = StringVar()
         self.cutLowerVar.set('0.00')
         self.cutUpperVar = StringVar()
@@ -71,12 +74,17 @@ class App(Frame):
 
 
     def createWidgets(self): 
-        self.controlFrame = Frame(self, padx=10, pady=10, bg=bgColor, borderwidth=2, relief="groove", width=80)
+
+        # Top frame widgets for adding URLs and downloading and other options
+        self.controlFrame = Frame(self, padx=10, pady=10, bg=self.bg, borderwidth=2, relief="groove", width=80)
         self.controlFrame.pack(expand=True, padx=5, pady=5)
+
+        self.urlEntry = Entry(self.controlFrame, textvariable = self.urlVar,font=('Arial', 12), width=50)
+        self.urlEntry.grid(column=1, row=1, columnspan=4, padx=5, pady=5)
+        self.urlEntry.bind('<Button-1>',self.clearUrlEntry)                                             
 
         self.start = Button(self.controlFrame, text="Start Download", command=self.download, bg="#90be6d",width=15, height=3, padx=5, pady=7,font=('Arial', 12))
         self.start.grid(column=3, row=2, rowspan=2)
-
 
         self.deleteAllAudioBtn = Button(self.controlFrame, text="Delete All Audio", command=lambda:self.deleteAllAudio(), bg="red")
         self.deleteAllAudioBtn.grid(column=1, row=4, pady=3)
@@ -84,14 +92,12 @@ class App(Frame):
         self.deleteAllVideoBtn = Button(self.controlFrame, text="Delete All Video", command=lambda:self.deleteAllVideo(), bg="red")
         self.deleteAllVideoBtn.grid(column=2, row=4, pady=3)
 
-        self.deleteOnDownload = Checkbutton(self.controlFrame, text="Delete after download", variable=self.deleteOnDownloadVar,bg=bgColor)
+        self.deleteOnDownload = Checkbutton(self.controlFrame, text="Delete after download", variable=self.deleteOnDownloadVar,bg=self.bg)
         self.deleteOnDownload.grid(column=3, row=4)
-
 
         self.addPlaylistBtn = Button(self.controlFrame, text="Playlist Audio", command= lambda : self.addPlaylist(False), bg="#f9c74f",width=15,  padx=5, pady=5,font=('Arial', 12))
         self.addPlaylistBtn.grid(column=1, row=3)
         
-
         self.addUrlBtn = Button(self.controlFrame, text="Single Audio", command=lambda : self.addUrl(False), bg="#ffe3b0",width=15,  padx=5, pady=5,font=('Arial', 12))
         self.addUrlBtn.grid(column=1, row=2)
 
@@ -101,24 +107,24 @@ class App(Frame):
         self.addUrlVideoBtn = Button(self.controlFrame, text="Single Video", command=lambda : self.addUrl(True), bg="#f3a29c",width=15,  padx=5, pady=5,font=('Arial', 12))
         self.addUrlVideoBtn.grid(column=2, row=2)
 
-
-        self.statusFrame = Frame(self, padx=10, pady=10,bg=bgColor, borderwidth=2, relief="groove", width=80)
+        # Frame below URL input, displays status of URL retrieval success, errors, and download progress
+        self.statusFrame = Frame(self, padx=10, pady=10,bg=self.bg, borderwidth=2, relief="groove", width=80)
         self.statusFrame.pack(expand=True, padx=5, pady=5)
 
-        self.audioCountLabel = Label(self.statusFrame, textvariable = self.audioCountVar, padx=10,font=('Arial', 12), bg=bgColor)
+        self.audioCountLabel = Label(self.statusFrame, textvariable = self.audioCountVar, padx=10,font=('Arial', 12), bg=self.bg)
         self.audioCountLabel.grid(column=0, row=1)
 
-        self.videoCountLabel = Label(self.statusFrame, textvariable = self.videoCountVar, padx=10,font=('Arial', 12), bg=bgColor)
+        self.videoCountLabel = Label(self.statusFrame, textvariable = self.videoCountVar, padx=10,font=('Arial', 12), bg=self.bg)
         self.videoCountLabel.grid(column=1, row=1)
 
-        self.statusLabel = Label(self.statusFrame, textvariable = self.statusVar, padx=10, font=('Arial', 12), bg=bgColor)
+        self.statusLabel = Label(self.statusFrame, textvariable = self.statusVar, padx=10, font=('Arial', 12), bg=self.bg)
         self.statusLabel.grid(column=0,columnspan=2, row=2)
 
-
-        self.optionsFrame1 = Frame(self.controlFrame, padx=5, pady=5, bg=bgColor, borderwidth=2, relief="groove")
+        # Top right frame for controlling playlist range to be retrieved
+        self.optionsFrame1 = Frame(self.controlFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
         self.optionsFrame1.grid(padx=5, pady=5, row=1,rowspan=2, column=5, columnspan=3)
 
-        self.playlistRangeLabel = Checkbutton(self.optionsFrame1, text="Playlist range", variable=self.playlistRangeVar,bg=bgColor)
+        self.playlistRangeLabel = Checkbutton(self.optionsFrame1, text="Playlist range", variable=self.playlistRangeVar,bg=self.bg)
         self.playlistRangeLabel.grid(column=1, columnspan=3, row=1)
 
         self.playlistLowerRange = Entry(self.optionsFrame1, textvariable=self.playlistLowerRangeVar, width=4)
@@ -130,11 +136,11 @@ class App(Frame):
         self.playlistUpperRange = Entry(self.optionsFrame1, textvariable=self.playlistUpperRangeVar, width=4)
         self.playlistUpperRange.grid(column=3, row=2)
 
-
-        self.optionsFrame2 = Frame(self.controlFrame, padx=5, pady=5, bg=bgColor, borderwidth=2, relief="groove")
+        # Top right frame for cutting song or video
+        self.optionsFrame2 = Frame(self.controlFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
         self.optionsFrame2.grid(padx=5, pady=5, row=3,rowspan=2, column=5, columnspan=3)
 
-        self.cutRangeLabel = Checkbutton(self.optionsFrame2, text="Cut song/video: ", variable=self.cutVar, bg=bgColor)
+        self.cutRangeLabel = Checkbutton(self.optionsFrame2, text="Cut song/video: ", variable=self.cutVar, bg=self.bg)
         self.cutRangeLabel.grid(column=1, columnspan=3, row=1)
 
         self.cutLowerRangeEntry = Entry(self.optionsFrame2, textvariable=self.cutLowerVar, width=4)
@@ -146,25 +152,18 @@ class App(Frame):
         self.cutUpperRangeEntry = Entry(self.optionsFrame2, textvariable=self.cutUpperVar, width=4)
         self.cutUpperRangeEntry.grid(column=3, row=2)
 
-
-
-        self.optionsFrame3 = Frame(self.controlFrame, padx=5, pady=5, bg=bgColor)
+        # Top right frame for the program to add any found default metadata tags
+        self.optionsFrame3 = Frame(self.controlFrame, padx=5, pady=5, bg=self.bg)
         self.optionsFrame3.grid(padx=5, pady=5, row=1, rowspan=5, column = 9, columnspan=3)
 
-        self.addMdTags = Checkbutton(self.optionsFrame3, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=bgColor)
+        self.addMdTags = Checkbutton(self.optionsFrame3, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=self.bg)
         self.addMdTags.grid(column=1, columnspan=3, row=1,rowspan=2, pady=10)
 
-        self.addTitleTags = Checkbutton(self.optionsFrame3, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=bgColor)
+        self.addTitleTags = Checkbutton(self.optionsFrame3, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=self.bg)
         self.addTitleTags.grid(column=1, columnspan=3, row=4,rowspan=2, pady=10)
 
-
-
-
-        self.urlEntry = Entry(self.controlFrame, textvariable = self.urlVar,font=('Arial', 12), width=50)
-        self.urlEntry.grid(column=1, row=1, columnspan=4, padx=5, pady=5)
-        self.urlEntry.bind('<Button-1>',self.clearUrlEntry)                                             # Clear entry upon first click and after successful YouTube fetch
-
-        self.scrollFrame = Frame(self, padx=5, pady=10, bg=bgColor)
+        # Middle frame/scrollbox for holding URLs retrieved and ready to be customized or downloaded
+        self.scrollFrame = Frame(self, padx=5, pady=10, bg=self.bg)
         self.scrollFrame.pack()
 
         self.scroll_bar = Scrollbar(self.scrollFrame) 
@@ -175,10 +174,13 @@ class App(Frame):
         self.mylist.bind("<<ListboxSelect>>", self.showUrl)
 
         self.scroll_bar.config( command = self.mylist.yview ) 
-        self.previewFrame = Frame(self, padx=10, pady=10, bg=bgColor)
+        self.previewFrame = Frame(self, padx=10, pady=10, bg=self.bg)
         self.previewFrame.pack()
 
-    def showUrl(self, ev):
+
+    # Shows all data retrieved from youtube and options to customize before downloading
+    # Loads into preview frame (bottom frame)
+    def showUrl(self, ev):                                                              # Binds to 'self.mylist'
         self.previewCutLowVar.set('0.00')
         self.previewCutHighVar.set('0.00')
         if self.previewUrlFrame != None:                                                # Destroy currently in preview frame
@@ -188,20 +190,21 @@ class App(Frame):
             selectedString = ev.widget.get(ev.widget.curselection()[0])
         except IndexError:
             return
-        selectedUrl = selectedString.split(' ----- ')[0]                                # Get url of selected in listbox for self.urls key
+        selectedUrl = selectedString.split(' ----- ')[0]                                # Gets url of selected item in listbox
         self.nameChangeVar.set(self.urls[selectedUrl]['name'])
         self.tagChangeVar.set('')
         formattedMetadata = ""                                                              # Display any metadata extracted from the url
         for i in [*self.urls[selectedUrl]['metadata']]:
-            formattedMetadata += self.addLineBreaks(i + " : " + self.urls[selectedUrl]['metadata'][i]+"\n")
+            formattedMetadata += addLineBreaks(i + " : " + self.urls[selectedUrl]['metadata'][i]+"\n")
 
-        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=bgColor, borderwidth=2, relief="groove")                           # Pack url specific frame in preview frame
+        # Configure GUI to show preview of URL content, including customization options
+        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")                             # Pack URL frame into in preview frame
         urlFrame.pack(expand=True)
 
-        urlName = Label(urlFrame, textvariable=self.nameChangeVar, bg=bgColor)
+        urlName = Label(urlFrame, textvariable=self.nameChangeVar, bg=self.bg)                                                      
         urlName.grid(row=0, column=0, columnspan=10)
 
-        urlLabel = Label(urlFrame, text=selectedUrl, font=('Helvetica', 12), bg=bgColor)
+        urlLabel = Label(urlFrame, text=selectedUrl, font=('Helvetica', 12), bg=self.bg)
         urlLabel.grid(row=1, column=0,columnspan=10)
 
         urlDelete = Button(urlFrame, text="Delete",command=lambda:self.deleteUrl(selectedUrl), bg="#FF9999")
@@ -222,17 +225,16 @@ class App(Frame):
         else:
             formattedInfo += "Length: "+self.urls[selectedUrl]['length']
 
-        urlInfoAndCutFrame = Frame(urlFrame, bg=bgColor, borderwidth=2, relief="groove")
+        urlInfoAndCutFrame = Frame(urlFrame, bg=self.bg, borderwidth=2, relief="groove")
         urlInfoAndCutFrame.grid(row=3, column=1)
 
-        urlInfo = Label(urlInfoAndCutFrame, text=formattedInfo, bg=bgColor)
+        urlInfo = Label(urlInfoAndCutFrame, text=formattedInfo, bg=self.bg)
         urlInfo.grid(row=1, column=1)
 
-
-        optionsFrame = Frame(urlInfoAndCutFrame, padx=5, pady=5, bg=bgColor, borderwidth=2, relief="groove")
+        optionsFrame = Frame(urlInfoAndCutFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
         optionsFrame.grid(padx=5, pady=5, row=3,rowspan=2, column=5, columnspan=3)
 
-        cutRangeBtn = Button(optionsFrame, text="Cut song/video: ",command= lambda:self.makeCutPreview(selectedUrl), bg=bgColor)
+        cutRangeBtn = Button(optionsFrame, text="Cut song/video: ",command= lambda:self.makeCutPreview(selectedUrl), bg=self.bg)
         cutRangeBtn.grid(column=1, columnspan=3, row=2)
 
         cutLowerRangeEntry = Entry(optionsFrame, textvariable=self.previewCutLowVar, width=4)
@@ -243,16 +245,17 @@ class App(Frame):
 
         cutUpperRangeEntry = Entry(optionsFrame, textvariable=self.previewCutHighVar, width=4)
         cutUpperRangeEntry.grid(column=3, row=1)
-
         
-        urlMetadata = Label(urlFrame, text=formattedMetadata, bg=bgColor)
+        urlMetadata = Label(urlFrame, text=formattedMetadata, bg=self.bg)
         urlMetadata.grid(row=3, column=2, columnspan=1)
 
+        # Only add tags if downloading audio only
+        # TODO: Add support for adding tags to .mp4
         if not self.urls[selectedUrl]['includeVideo']:
-            urlTags = Frame(urlFrame, padx=5, pady=5, bg=bgColor, borderwidth=2, relief="groove")
+            urlTags = Frame(urlFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
             urlTags.grid(row=8, column=2)
 
-            urlTagsTitle = Label(urlTags, text="MP3 Metadata Tags: ",fg="#119911", bg=bgColor)
+            urlTagsTitle = Label(urlTags, text="MP3 Metadata Tags: ",fg="#119911", bg=self.bg)
             urlTagsTitle.pack(side=LEFT)
 
             for k in self.urls[selectedUrl]['tagList']:                                         # Load any tags previously selected
@@ -283,7 +286,7 @@ class App(Frame):
         img = Image.open(BytesIO(imgUrl.content))
         img = img.resize((160,90))
         render = ImageTk.PhotoImage(img)
-        imageLabel = Label(urlFrame, image=render, width=160, height=90, bg=bgColor)
+        imageLabel = Label(urlFrame, image=render, width=160, height=90, bg=self.bg)
         imageLabel.grid(row=3,rowspan=2,column=3,columnspan=5)
         imageLabel.image = render
 
@@ -324,7 +327,6 @@ class App(Frame):
                 self.statusLabel['fg'] = "red"
                 self.update()
         except:
-            print("errrrrorrr")
             self.statusVar.set('Invalid cut range, length of video is '+str(formatSeconds(self.urls[url]['lengthInSeconds'])))
             self.statusLabel['fg'] = "red"
             return
@@ -385,12 +387,6 @@ class App(Frame):
         self.nameChangeVar.set(newName)
         self.mylist.selection_set('end') 
         self.clearNameChangeEntryNextClick = True
-
-    def addLineBreaks(self, string):                                                # Helper function for displaying metadata
-        retList = string
-        for i in range(1,int(len(string)/50)+1):
-            retList = retList[:i*50] + '\n' + retList[i*50:]
-        return retList
 
     def deleteAllAudio(self):
         for i in [*self.urls]:
@@ -465,7 +461,7 @@ class App(Frame):
     def addPlaylist(self, includeVideo):
         inputPlaylist = self.urlVar.get()
         if self.cutVar.get():
-                self.statusVar.set("Can't cut playlist, click URLs in list to modify")
+                self.statusVar.set("Can't cut playlist, individually click URLs in list to modify")
                 self.statusLabel['fg'] = "red"
                 return
         try:
@@ -511,14 +507,9 @@ class App(Frame):
             yt = None
             try:
                 yt = pytube.YouTube(j)
-            except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError):
+            except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
+                    pytube.exceptions.VideoPrivate, KeyError):
                 print('Video is unavailable at:::'+j)
-                continue
-            except pytube.exceptions.VideoPrivate:
-                print('Video is private at:::'+j)
-                continue
-            except KeyError:
-                print('Video has been deleted at:::'+j)
                 continue
             stream = yt.streams.filter(only_audio=(not includeVideo)).first()
             md = ''
@@ -538,9 +529,6 @@ class App(Frame):
                     tl.append(['Contributing Artists',yt.title.split('-')[0]])
                     alreadyAddedTitleTags = True
                 pass
-            # if self.addTitleTagsVar.get() and not alreadyAddedTitleTags and len(yt.title.split('-')) > 1:
-            #     tl.append(['Title', yt.title.split('-')[1]])
-            #     tl.append(['Contributing Artists',yt.title.split('-')[0]])
             self.urls[j] = {'includeVideo':includeVideo, 'yt':yt,'stream': stream, 'name':yt.title, 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tl, 'metadata':md, 'cut':False}
             mediaTag = None
             if includeVideo:
@@ -588,16 +576,11 @@ class App(Frame):
         yt=None
         try:
             yt = pytube.YouTube(inputUrl)
-        except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError) as e:
+        except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
+                pytube.exceptions.VideoPrivate, KeyError) as e:
             print(e.args)
             self.statusVar.set('Failed to fetch video')
             self.statusLabel['fg'] = "red"
-            return
-        except pytube.exceptions.VideoPrivate:
-            print('Video is private at:::'+j)
-            return
-        except KeyError:
-            print('Video has been deleted at:::'+j)
             return
         stream = yt.streams.filter(only_audio=(not includeVideo)).first()
         md = ''
@@ -616,9 +599,6 @@ class App(Frame):
                     tl.append(['Contributing Artists',yt.title.split('-')[0]])
                     alreadyAddedTitleTags = True
                 pass
-        # if self.addTitleTagsVar.get() and not alreadyAddedTitleTags and len(yt.title.split('-')) > 1:
-        #     tl.append(['Title', yt.title.split('-')[1]])
-        #     tl.append(['Contributing Artists',yt.title.split('-')[0]])
         cutRange = False
         if self.cutVar.get():
             cutRange = self.makeCut(inputUrl, yt.length)
@@ -644,29 +624,29 @@ class App(Frame):
 
 
     def download(self):
-        if not len([*self.urls]):
+        if not len([*self.urls]):                                                                       # Check if user entered anything
             self.statusVar.set('No urls provided')
             self.statusLabel['fg'] = "red"
             self.update()
             return
-        self.statusVar.set('Downloading...')
+        self.statusVar.set('Downloading...')                                                            # Update status label 
         self.statusLabel['fg'] = "blue"
         self.update()
         vidNames = []
         directory = fd.askdirectory()
-        if not directory:
+        if not directory:                                                                               # If exited out of directory chooser, warn user
             self.statusVar.set('No directory chosen')
             self.statusLabel['fg'] = "red"
             return
-        for k,u in enumerate([*self.urls]):
-            self.statusVar.set('Downloading...('+str(k+1)+"/"+str(len([*self.urls]))+")")
+        for k,u in enumerate([*self.urls]):                                                             # Download all added URLs
+            self.statusVar.set('Downloading...('+str(k+1)+"/"+str(len([*self.urls]))+")")               
             self.statusLabel['fg'] = "blue"
-            self.update()
-            if self.urls[u]['includeVideo']:
+            self.update()                                                                               
+            if self.urls[u]['includeVideo']:                                                            
                 if self.urls[u]['cut']:
                     fileName = self.urls[u]['name']+'.mp4'
-                    self.urls[u]['stream'].download(output_path=directory, filename='tempCut')
-                    tempPath = os.path.join(directory, 'tempCut.mp4')                                   # Moviepy would only write first second of video if path name had spaces
+                    self.urls[u]['stream'].download(output_path=directory, filename='tempCut')          
+                    tempPath = os.path.join(directory, 'tempCut.mp4')                                   
                     low = self.urls[u]['lowCut']
                     high = self.urls[u]['highCut']
                     finalPath=os.path.join(directory, self.urls[u]['name']+'.mp4')
@@ -677,8 +657,6 @@ class App(Frame):
                     os.remove(tempPath)
                 continue
             dlReturn = self.urls[u]['stream'].download(output_path=directory, filename=self.urls[u]['name'])
-            print("CREATING SONG")
-            print("DL Title", dlReturn.title())
             fn = self.urls[u]['name']+'.mp4'
             full_path = os.path.join(directory, fn)
             output_path = dlReturn[:-1]+"3"
@@ -719,22 +697,3 @@ class App(Frame):
         self.statusLabel['fg'] = "green"
         
 
-def formatSeconds(seconds): 
-    seconds = seconds % (24 * 3600) 
-    hour = seconds // 3600
-    seconds %= 3600
-    minutes = seconds // 60
-    seconds %= 60
-    return "%d:%02d:%02d" % (hour, minutes, seconds)
-
-def main():
-    root = Tk()
-    root['bg'] = bgColor
-    root.geometry("1200x1200")
-    root.title("YouTube Downloader")
-    app = App(master=root)
-    app.mainloop()
-
-
-if __name__ == '__main__':
-    main()
