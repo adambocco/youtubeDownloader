@@ -1,16 +1,14 @@
-import os, sys, time
-from moviepy.editor import AudioFileClip
-from moviepy.editor import VideoFileClip
-import re
+import os
+from moviepy.editor import AudioFileClip, VideoFileClip
 import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
 from tkinter import *
 from tkinter import filedialog as fd
-import eyed3
+from eyed3 import load as eyed3Load
 from PIL import Image, ImageTk
 from io import BytesIO
-import requests
+from requests import get as requestsGet
 
-import helpers
+from helpers import formatSeconds, addLineBreaks
 
 class App(Frame):
     def __init__(self, master=None):
@@ -282,7 +280,7 @@ class App(Frame):
 
             self.urls[selectedUrl]['urlTags'] = urlTags
 
-        imgUrl = requests.get(self.urls[selectedUrl]['yt'].thumbnail_url)
+        imgUrl = requestsGet(self.urls[selectedUrl]['yt'].thumbnail_url)
         img = Image.open(BytesIO(imgUrl.content))
         img = img.resize((160,90))
         render = ImageTk.PhotoImage(img)
@@ -641,22 +639,23 @@ class App(Frame):
         for k,u in enumerate([*self.urls]):                                                             # Download all added URLs
             self.statusVar.set('Downloading...('+str(k+1)+"/"+str(len([*self.urls]))+")")               
             self.statusLabel['fg'] = "blue"
-            self.update()                                                                               
-            if self.urls[u]['includeVideo']:                                                            
-                if self.urls[u]['cut']:
-                    fileName = self.urls[u]['name']+'.mp4'
-                    self.urls[u]['stream'].download(output_path=directory, filename='tempCut')          
-                    tempPath = os.path.join(directory, 'tempCut.mp4')                                   
-                    low = self.urls[u]['lowCut']
-                    high = self.urls[u]['highCut']
-                    finalPath=os.path.join(directory, self.urls[u]['name']+'.mp4')
-                    y = VideoFileClip(tempPath)
-                    y=y.subclip(low,high)
-                    y.write_videofile(finalPath)                                                        # Save as final path name
-                    y.close()
-                    os.remove(tempPath)
+            self.update()                                                                              
+            if self.urls[u]['includeVideo'] and self.urls[u]['cut']:
+                fileName = self.urls[u]['name']+'.mp4'
+                self.urls[u]['stream'].download(output_path=directory, filename='tempCut')          
+                tempPath = os.path.join(directory, 'tempCut.mp4')                                   
+                low = self.urls[u]['lowCut']
+                high = self.urls[u]['highCut']
+                finalPath=os.path.join(directory, self.urls[u]['name']+'.mp4')
+                y = VideoFileClip(tempPath)
+                y=y.subclip(low,high)
+                y.write_videofile(finalPath)                                                        # Save as final path name
+                y.close()
+                os.remove(tempPath)
                 continue
             dlReturn = self.urls[u]['stream'].download(output_path=directory, filename=self.urls[u]['name'])
+            if self.urls[u]['includeVideo']:     
+                continue
             fn = self.urls[u]['name']+'.mp4'
             full_path = os.path.join(directory, fn)
             output_path = dlReturn[:-1]+"3"
@@ -669,7 +668,7 @@ class App(Frame):
             clip.close()
             os.remove(dlReturn)
             if len(self.urls[u]['tagList']) != 0:                           # Try to match metadata with mp3 tags to add to output files
-                newAudioFile = eyed3.load(output_path)
+                newAudioFile = eyed3Load(output_path)
                 print(output_path)
                 for g in self.urls[u]['tagList']:
                     if g[0] == 'Title':
@@ -696,4 +695,14 @@ class App(Frame):
         self.statusVar.set('Success! Downloaded into: '+directory)
         self.statusLabel['fg'] = "green"
         
+def main():
+    root = Tk()
+    root['bg'] = "#eeeeFa"
+    root.geometry("1200x1200")
+    root.title("YouTube Downloader")
+    app = App(master=root)
+    app.mainloop()
 
+
+if __name__ == '__main__':
+    main()
