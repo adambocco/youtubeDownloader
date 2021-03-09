@@ -15,44 +15,68 @@ class App(Frame):
         super().__init__(master)
         self.master = master
         self.pack()
-        self.urls = {}                                                                                              # Holds data from YouTube, references to widgets representing that data, and tags
         self.bg = "#eeeeFa"
-        self.tagOptions = ['Title', 'Contributing Artists', 'Album', 'Album Artist', 'Year', 'Track Number']        # Options for tags optionmenu
-        self.mdToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}   # Maps youtube metadata to mp3 header tag name
 
-        self.urlVar = StringVar()                                                                                   # textvariable for url entry
+        # Holds data from YouTube, references to widgets representing that data, and tags
+        self.urls = {} 
+
+        # Options for tags optionmenu
+        self.tagOptions = ['Title', 'Contributing Artists', 'Album', 'Album Artist', 'Year', 'Track Number']        
+        # Maps youtube metadata to mp3 header tag name
+        self.mdToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}   
+
+        # textvariable for url entry
+        self.urlVar = StringVar()                                                                                  
         self.urlVar.set("Enter the YouTube URL of a video or playlist")
-
+        
+        # textvariable for name change entry 
         self.nameChangeVar = StringVar() 
-        self.urlListVar = [];                                                                                       # textvariable for name change entry 
+        self.urlListVar = [];                                                                                       
 
-        self.listVar = Variable(value=self.urlListVar)                                                              # listvariable for urls added listbox
-        self.audioCountVar = StringVar()                                                                            # textvariable for count of songs added label
+        # listvariable for fetched urls added to listbox
+        self.listVar = Variable(value=self.urlListVar)         
+
+         # textvariable for count of songs added label                                       
+        self.audioCountVar = StringVar()                                                                           
         self.audioCountVar.set('Audio: 0')
-        self.videoCountVar = StringVar()                                                                            # textvariable for count of songs added label
+
+         # textvariable for count of videos added label
+        self.videoCountVar = StringVar()                                                                            
         self.videoCountVar.set('Video: 0')
+
+        # text variable for holding application status (ALL user notifications pop up here)
         self.statusVar = StringVar()
         self.statusVar.set('')
-        self.tagChangeVar = StringVar()                                                                             # textvariable for add mp3 tag entry
+
+        # textvariable for dropdown list of songs
+        self.tagChangeVar = StringVar()                                                                            
         self.tagChangeVar.set('Enter tag descriptor')
-        self.tagVar = StringVar()                                                                                   # textvariable for dropdown list of songs
+
+        # textvariable for holding currently selected metadata tag
+        self.tagVar = StringVar()                                                                                   
         self.tagVar.set(self.tagOptions[0])
 
-        self.deleteOnDownloadVar = IntVar()
-        self.deleteOnDownloadVar.set(0)
-        self.playlistRangeVar = IntVar()
-        self.playlistRangeVar.set(0)
-        self.cutVar = IntVar()
-        self.cutVar.set(0)
-        self.addMdTagsVar = IntVar()
-        self.addMdTagsVar.set(1)
-        self.addTitleTagsVar = IntVar()
-        self.addTitleTagsVar.set(1)
+        # boolvariables for checkbox options
+        self.deleteOnDownloadVar = BooleanVar()
+        self.deleteOnDownloadVar.set(False)
+        self.playlistRangeVar = BooleanVar()
+        self.playlistRangeVar.set(False)
+        self.cutVar = BooleanVar()
+        self.cutVar.set(False)
+        self.addMdTagsVar = BooleanVar()
+        self.addMdTagsVar.set(True)
+        self.addTitleTagsVar = BooleanVar()
+        self.addTitleTagsVar.set(True)
+
+        # textvaraibles for holding range of videos in playlist to download, only active when [self.playlistRangeVar] is true
+        # 1-indexed, lower and upper range is inclusive
         self.playlistLowerRangeVar = StringVar()
         self.playlistLowerRangeVar.set('1')
         self.playlistUpperRangeVar = StringVar()
         self.playlistUpperRangeVar.set('10')
 
+        # textvariables for holding range to cut media
+        # only active when [self.cutVar] is true
         self.cutLowerVar = StringVar()
         self.cutLowerVar.set('0.00')
         self.cutUpperVar = StringVar()
@@ -62,9 +86,12 @@ class App(Frame):
         self.previewCutHighVar = StringVar()
         self.previewCutHighVar.set('0.00')
  
+
         self.clearUrlEntryNextClick = True
         self.clearNameChangeEntryNextClick = True
         self.clearTagEntryNextClick = True
+
+        # holds URL and data for currently selected video/song
         self.previewUrlFrame = None
         self.previewUrl = None
         
@@ -178,32 +205,47 @@ class App(Frame):
 
     # Shows all data retrieved from youtube and options to customize before downloading
     # Loads into preview frame (bottom frame)
-    def showUrl(self, ev):                                                              # Binds to 'self.mylist'
+    # Binds to 'self.mylist'
+    def showUrl(self, ev):                                                             
         self.previewCutLowVar.set('0.00')
         self.previewCutHighVar.set('0.00')
-        if self.previewUrlFrame != None:                                                # Destroy currently in preview frame
+
+         # Destroy currently in preview frame to show currently selecte done
+        if self.previewUrlFrame != None:                                               
             self.previewUrlFrame.destroy()
             self.previewUrl = None
+
         try:
             selectedString = ev.widget.get(ev.widget.curselection()[0])
+        # handle error from user clicking in empty list box
         except IndexError:
             return
-        selectedUrl = selectedString.split(' ----- ')[0]                                # Gets url of selected item in listbox
+        
+        # Gets url of selected item in listbox
+        selectedUrl = selectedString.split(' ----- ')[0]                                
         self.nameChangeVar.set(self.urls[selectedUrl]['name'])
         self.tagChangeVar.set('')
-        formattedMetadata = ""                                                              # Display any metadata extracted from the url
+
+        # Display any metadata extracted from the url
+        formattedMetadata = ""                                                              
         for i in [*self.urls[selectedUrl]['metadata']]:
             formattedMetadata += addLineBreaks(i + " : " + self.urls[selectedUrl]['metadata'][i]+"\n")
 
-        # Configure GUI to show preview of URL content, including customization options
-        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")                             # Pack URL frame into in preview frame
-        urlFrame.pack(expand=True)
+        urlMetadata = Label(urlFrame, text=formattedMetadata, bg=self.bg)
+        urlMetadata.grid(row=3, column=2, columnspan=1)
 
-        urlName = Label(urlFrame, textvariable=self.nameChangeVar, bg=self.bg)                                                      
-        urlName.grid(row=0, column=0, columnspan=10)
+        # Configure GUI to show preview of URL content, including customization options
+        # Pack URL frame into in preview frame
+        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")                             
+        urlFrame.pack(expand=True)
 
         urlLabel = Label(urlFrame, text=selectedUrl, font=('Helvetica', 12), bg=self.bg)
         urlLabel.grid(row=1, column=0,columnspan=10)
+
+        # Components for showing current name 
+        # Represents name of downloaded file minus the extension
+        urlName = Label(urlFrame, textvariable=self.nameChangeVar, bg=self.bg)                                                      
+        urlName.grid(row=0, column=0, columnspan=10)
 
         urlDelete = Button(urlFrame, text="Delete",command=lambda:self.deleteUrl(selectedUrl), bg="#FF9999")
         urlDelete.grid(row=0, column=10)
@@ -215,6 +257,8 @@ class App(Frame):
         urlChangeName = Button(urlFrame,text="Change Name", command=lambda:self.changeName(selectedUrl), bg="#99BBBB")
         urlChangeName.grid(row=6, column=3, columnspan=1)
 
+        # If a video was cut before being fetched, load that info
+        # Otherwise, just show media length until user decides to cut
         formattedInfo = ""
         if self.urls[selectedUrl]['cut']:
             formattedInfo += "Original Length: "+self.urls[selectedUrl]['length']+"\n"
@@ -223,6 +267,7 @@ class App(Frame):
         else:
             formattedInfo += "Length: "+self.urls[selectedUrl]['length']
 
+        # Pack cut text info
         urlInfoAndCutFrame = Frame(urlFrame, bg=self.bg, borderwidth=2, relief="groove")
         urlInfoAndCutFrame.grid(row=3, column=1)
 
@@ -232,6 +277,7 @@ class App(Frame):
         optionsFrame = Frame(urlInfoAndCutFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
         optionsFrame.grid(padx=5, pady=5, row=3,rowspan=2, column=5, columnspan=3)
 
+        # Pack cutting tools (range and button)
         cutRangeBtn = Button(optionsFrame, text="Cut song/video: ",command= lambda:self.makeCutPreview(selectedUrl), bg=self.bg)
         cutRangeBtn.grid(column=1, columnspan=3, row=2)
 
@@ -243,11 +289,8 @@ class App(Frame):
 
         cutUpperRangeEntry = Entry(optionsFrame, textvariable=self.previewCutHighVar, width=4)
         cutUpperRangeEntry.grid(column=3, row=1)
-        
-        urlMetadata = Label(urlFrame, text=formattedMetadata, bg=self.bg)
-        urlMetadata.grid(row=3, column=2, columnspan=1)
 
-        # Only add tags if downloading audio only
+        # Add metadata tags if downloading audio only
         # TODO: Add support for adding tags to .mp4
         if not self.urls[selectedUrl]['includeVideo']:
             urlTags = Frame(urlFrame, padx=5, pady=5, bg=self.bg, borderwidth=2, relief="groove")
@@ -288,7 +331,8 @@ class App(Frame):
         imageLabel.grid(row=3,rowspan=2,column=3,columnspan=5)
         imageLabel.image = render
 
-        self.urls[selectedUrl]['urlLabel'] = urlLabel                               # Assign references to the widgets in preview frame to url dict entry
+        # Assign references to the widgets in preview frame to url dict entry
+        self.urls[selectedUrl]['urlLabel'] = urlLabel                               
         self.urls[selectedUrl]['urlDelete'] = urlDelete
         self.urls[selectedUrl]['urlInfo'] = urlInfo
         self.urls[selectedUrl]['urlFrame'] = urlFrame
@@ -296,21 +340,28 @@ class App(Frame):
         self.previewUrl = selectedUrl
     
     def deleteUrl(self, url):
-        self.urls[url]['urlFrame'].destroy()                                        # or self.previewUrlFrame.destroy()
+        self.urls[url]['urlFrame'].destroy()                                       
         self.previewUrl = None
         self.mylist.delete(self.mylist.curselection()[0])
         if self.urls[url]['includeVideo']:
-            self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])-1))     # Decrement count by 1
+            # Decrement fetched videos count by 1
+            self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])-1))     
         else:
-            self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])-1))     # Decrement count by 1
+            # Decrement fetched songs count by 1
+            self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])-1))     
         del self.urls[url]
 
+    # Handles cutting in URL preview frame after fetching
+    # When user makes a cut on a song or video, calculate and save new range
     def makeCutPreview(self, url):
+
+        # cut in seconds, minutes.seconds, or hours.minutes.seconds
         lowArr = self.previewCutLowVar.get().split('.')
         highArr = self.previewCutHighVar.get().split('.')
         low=0
         high=0
         try:
+            # Calculate cut range based on input format
             if len(lowArr) ==1 and len(highArr) == 1 and int(lowArr[0]) > 0 and int(lowArr[0]) < int(highArr[0]):
                 low = int(lowArr[0])
                 high = int(highArr[0])
@@ -332,6 +383,8 @@ class App(Frame):
             self.statusVar.set('Invalid cut range, length of video is '+str(formatSeconds(self.urls[url]['lengthInSeconds'])))
             self.statusLabel['fg'] = "red"
             return
+
+        # Update variables and user view of current cut
         self.urls[url]['cut'] = True
         self.urls[url]['lowCut'] = low
         self.urls[url]['highCut'] = high
@@ -341,7 +394,7 @@ class App(Frame):
         formattedInfo += "Cut Range: "+ formatSeconds(low) + " - " + formatSeconds(high)
         self.urls[url]['urlInfo']['text'] = formattedInfo
 
-
+    # Handles cutting before fetching URL
     def makeCut(self, url, seconds):
         lowArr = self.cutLowerVar.get().split('.')
         highArr = self.cutUpperVar.get().split('.')
@@ -363,7 +416,9 @@ class App(Frame):
                 self.update()
                 return False
         except:
-            print("errrrrorrr")
+            self.staturVar.set('Invalid cut. Acceptable formats: sec, min.sec, or hour.min.sec')
+            self.statusLabel['fg'] = "red"
+            self.update()
             return False
         if high > int(seconds) or high-low < 0:
             self.statusVar.set('Invalid cut range, length of video is '+str(formatSeconds(int(seconds))))
@@ -371,12 +426,14 @@ class App(Frame):
             return False
         return [low, high]
 
-
+    # Handle changing name 
     def changeName(self, url):
         newName = self.nameChangeVar.get()
         self.mylist.delete(self.mylist.curselection()[0])
         self.urls[url]['name'] = newName
         mediaTag = None
+
+        # Update media tag at the end of URL in list view
         if self.urls[url]['includeVideo']:
             mediaTag = '(Video)'
         else:
@@ -384,13 +441,15 @@ class App(Frame):
         self.mylist.insert(END, url+" ----- "+newName+" "+mediaTag) 
         self.nameChangeVar.set(newName)
         self.mylist.selection_set('end') 
+
         self.clearNameChangeEntryNextClick = True
 
+    # Delete all fetched audio URLs
     def deleteAllAudio(self):
         for i in [*self.urls]:
             if not self.urls[i]['includeVideo']:
                 if i == self.previewUrl:
-                    self.urls[i]['urlFrame'].destroy()                                        # or self.previewUrlFrame.destroy()
+                    self.urls[i]['urlFrame'].destroy()                                        
                     self.previewUrl = None
                 self.audioCountVar.set('Audio: 0')
                 urlsInList = self.listVar.get()
@@ -401,11 +460,12 @@ class App(Frame):
                         self.mylist.delete(k)
                 del self.urls[i]
 
+    # Delete all fetch video URLs
     def deleteAllVideo(self):
         for i in [*self.urls]:
             if self.urls[i]['includeVideo']:
                 if i == self.previewUrl:
-                    self.urls[i]['urlFrame'].destroy()                                        # or self.previewUrlFrame.destroy()
+                    self.urls[i]['urlFrame'].destroy()                                        
                     self.previewUrl = None
                 self.videoCountVar.set('Video: 0')
                 urlsInList = self.listVar.get()
@@ -415,17 +475,19 @@ class App(Frame):
                         self.mylist.delete(k)
                 del self.urls[i]
 
-
+    # Manually add a metadata tag
     def addTag(self, url):
         self.clearTagEntryNextClick = True
         tagKey = self.tagVar.get()
         tagValue = self.tagChangeVar.get()
-        print(self.urls[url]['tagList'])
+
+        # If tag already exists, delete it
         for n in self.urls[url]['tagList']:
-            print("N: ",n)
             if n[0] == tagKey:
                 self.urls[url]['tagList'].remove(n)
                 n[2].destroy()
+
+        # Add new tag and event handlers
         tagDeleteButton = Button(self.urls[url]['urlTags'], text="X "+tagKey+" : "+tagValue,bg="#77cc55")
         tagDeleteButton.pack(side=BOTTOM)
         data={"tagKey": tagKey, "tagValue": tagValue, 'url':url}
@@ -433,8 +495,8 @@ class App(Frame):
 
         self.urls[url]['tagList'].append([tagKey,tagValue, tagDeleteButton])
     
+    # < ---------- On click event handlers ---------- >
     def deleteTag(self, ev, arg):
-        print("DELETING TAG")
         for m in self.urls[arg['url']]['tagList']:
             if m[0] == arg['tagKey']:
                 ev.widget.destroy()
@@ -455,22 +517,26 @@ class App(Frame):
         if self.clearNameChangeEntryNextClick:
             self.clearNameChangeEntryNextClick = False
             self.nameChangeVar.set('')
+    # < ---------- On click event handlers ---------- >
 
+    # Fetch entire playlist from single URL
     def addPlaylist(self, includeVideo):
         inputPlaylist = self.urlVar.get()
         if self.cutVar.get():
                 self.statusVar.set("Can't cut playlist, individually click URLs in list to modify")
-                self.statusLabel['fg'] = "red"
-                return
+                self.statusLabel['fg'] = "Orange"
         try:
             playlistUrls = pytube.Playlist(inputPlaylist).video_urls
         except KeyError:
-            print("No response from YouTube")
             self.statusVar.set('Failed to fetch playlist')
             self.statusLabel['fg'] = "red"
             return
+
+        # Some URLs may fail to load
         totalCount = 0
         successCount = 0
+
+        # If user specified a playlist range, check if it is valid, and if so, shorten [playlistUrls] accordingly
         if self.playlistRangeVar.get():
             try:
                 if (int(self.playlistLowerRangeVar.get()) < 1) or (int(self.playlistUpperRangeVar.get())>len(playlistUrls)):
@@ -484,78 +550,110 @@ class App(Frame):
                 self.statusVar.set('Invalid range (In playlist: '+str(len(playlistUrls))+")")
                 self.statusLabel['fg'] = "red"
                 return
+
+
         for j in playlistUrls:
             repeated = False
-            for b in [*self.urls]:                                              # If url is already in list, flash the entry widget
+
+            # Check if single URL of playlist is already in list
+            for b in [*self.urls]:                                              
                 if b == j:
-                    self.statusVar.set('...video is already in list')
+                    self.statusVar.set('Video is already in list')
                     self.statusLabel['fg'] = "red"
                     self.urlVar.set("URL " + j + " already entered")
                     self.update()
                     self.clearUrlEntryNextClick = True
                     repeated = True
                     continue
+            
+            # If a URL from playlist is already in list, add to totalCount (but not successCount) and continue to next URL
             if repeated:
                 totalCount+=1
                 continue
+
+            # Update status to user
             self.statusVar.set('Succeeded: '+str(successCount) + "/" + str(len(playlistUrls)) +" : Failed: "+str(totalCount-successCount) +"/" + str(len(playlistUrls)))
             self.statusLabel['fg'] = "blue"
             self.update()
+
             totalCount+=1
+
+            # Attempt to get this single URL from YouTube
             yt = None
             try:
                 yt = pytube.YouTube(j)
             except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
                     pytube.exceptions.VideoPrivate, KeyError):
-                print('Video is unavailable at:::'+j)
                 continue
+
+            # Get first stream of video or audio
             stream = yt.streams.filter(only_audio=(not includeVideo)).first()
+
+            # Metadata
             md = ''
-            tl = []
+
+            # List to hold dynamically added ID3 tags
+            tagList = []
             alreadyAddedTitleTags = False
             try:
                 md = [*yt.metadata][0]
                 for g in [*md]:
-                    print("Is " + g + " in : ", [*self.mdToTag])
                     if g in [*self.mdToTag]:
-                        tl.append([self.mdToTag[g], md[g]])
-                        print([self.mdToTag[g], md[g]])
+                        tagList.append([self.mdToTag[g], md[g]])
+
+
+            # No metadata gotten from YouTube
+            # If the user selected to also try adding metadata from the title, do that if the title format is correct
             except IndexError:
-                print('no metadata')
                 if len(yt.title.split('-')) >1 and self.addTitleTagsVar.get():
-                    tl.append(['Title', yt.title.split('-')[1]])
-                    tl.append(['Contributing Artists',yt.title.split('-')[0]])
+                    tagList.append(['Title', yt.title.split('-')[1]])
+                    tagList.append(['Contributing Artists',yt.title.split('-')[0]])
                     alreadyAddedTitleTags = True
                 pass
-            self.urls[j] = {'includeVideo':includeVideo, 'yt':yt,'stream': stream, 'name':yt.title, 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tl, 'metadata':md, 'cut':False}
+
+            # Create URL dictionary
+            self.urls[j] = {'includeVideo':includeVideo, 'yt':yt,'stream': stream, 'name':yt.title, 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tagList, 'metadata':md, 'cut':False}
+            
             mediaTag = None
+
+            # Count how many videos and songs are being downloaded and show in status frame
             if includeVideo:
                 self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
                 mediaTag = '(Video)'
             else:
                 self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
                 mediaTag = '(Audio)'
+            # Create text that represents URL in URL list
             self.mylist.insert(END, j+" ----- "+stream.default_filename[:-4]+" "+mediaTag)
                 
+            # Add to successful fetch out of totalCount
             successCount+=1
+
+        # When all URLs in playlist have been processed, 
         self.clearUrlEntryNextClick = True
         self.statusVar.set('Done! : Succeeded: '+str(successCount)+" : Failed: "+str(totalCount-successCount))
         self.statusLabel['fg'] = "green"
         self.update()
         
-
+    # Fetch a single URL
     def addUrl(self, includeVideo):
+        # warn user that options may not be applied
         if self.playlistRangeVar.get():
             self.statusVar.set("Can't apply playlist range to single URL")
-            self.statusLabel['fg'] = "red"
+            self.statusLabel['fg'] = "orange"
             self.update()
-            return
+
+        # update status frame
         self.statusVar.set('Fetching video from YouTube...')
         self.statusLabel['fg'] = "blue"
         self.update()
+
+        # Get URL from input
         inputUrl = self.urlVar.get()
+
+        # If URL is already in list, flash the URL entry and notify the user
         exists = False
-        for i in [*self.urls]:                                              # If url is already in list, flash the entry widget
+        for i in [*self.urls]:                                          
             if i == inputUrl:
                 self.urlVar.set("Already entered")
                 self.statusVar.set('Video is already in list')
@@ -571,19 +669,29 @@ class App(Frame):
                     else:
                         self.after(100*i, f)
                 return
-        yt=None
+
+        # Attempt to get this single URL from YouTube
+        yt=None        
         try:
             yt = pytube.YouTube(inputUrl)
         except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
                 pytube.exceptions.VideoPrivate, KeyError) as e:
-            print(e.args)
+
             self.statusVar.set('Failed to fetch video')
             self.statusLabel['fg'] = "red"
             return
+
+        # Get first stream of video or audio
         stream = yt.streams.filter(only_audio=(not includeVideo)).first()
+
+        # Metadata
         md = ''
-        tl = []
+
+        # List to hold dynamically added ID3 tags
+        tagList = []
+
         alreadyAddedTitleTags = False
+        # If user selected options to add ID3 tags from metadata, check 
         if self.addMdTags:
             try:
                 md = [*yt.metadata][0]
@@ -591,21 +699,29 @@ class App(Frame):
                     if g in [*self.mdToTag]:
                         tl.append([self.mdToTag[g], md[g]])
             except IndexError:
-                print('no metadata')
                 if len(yt.title.split('-')) >1 and self.addTitleTagsVar.get():
                     tl.append(['Title', yt.title.split('-')[1]])
                     tl.append(['Contributing Artists',yt.title.split('-')[0]])
                     alreadyAddedTitleTags = True
                 pass
+
+        # If user specified a cut, try or notify user that cut failed and stop
         cutRange = False
         if self.cutVar.get():
             cutRange = self.makeCut(inputUrl, yt.length)
             if not cutRange:
+                self.statusVar.set("Cut range is invalid")
+                self.statusLabel['fg'] = "red"
+                self.update()
                 return
+
+        # URL successfully fetched, make URL dictionary and notify user
         self.statusVar.set('Success!')
         self.statusLabel['fg'] = "green"
         self.clearUrlEntryNextClick = True
         self.urls[inputUrl] = {'includeVideo':includeVideo, 'yt': yt, 'stream': stream, 'name':stream.default_filename[:-4], 'length':formatSeconds(yt.length),'lengthInSeconds': yt.length, 'tagList':tl, 'metadata':md, 'cut':False}
+        
+        # Count how many videos and songs are being downloaded and show in status frame
         mediaTag = None
         if includeVideo:
             self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
@@ -613,63 +729,108 @@ class App(Frame):
         else:
             self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
             mediaTag = "(Audio)"
+
+        # Create text that represents URL in URL list
         self.mylist.insert(END, inputUrl+" ----- "+stream.default_filename[:-4]+" "+mediaTag) 
+        # Clear URL entry
         self.urlVar.set('')
+
+        # Add cut range data to URL dictionary if a cutRange was specified
         if cutRange:
             self.urls[inputUrl]['cut'] = True
             self.urls[inputUrl]['lowCut'] = cutRange[0]
             self.urls[inputUrl]['highCut'] = cutRange[1]
 
-
+    # Handles downloading of all contents in URL list
     def download(self):
-        if not len([*self.urls]):                                                                       # Check if user entered anything
+
+        # Check if user entered any URLS
+        if not len([*self.urls]):                                                                       
             self.statusVar.set('No urls provided')
             self.statusLabel['fg'] = "red"
             self.update()
             return
-        self.statusVar.set('Downloading...')                                                            # Update status label 
+
+        # Update status frame
+        self.statusVar.set('Downloading...')                                                            
         self.statusLabel['fg'] = "blue"
         self.update()
-        vidNames = []
+
         directory = fd.askdirectory()
-        if not directory:                                                                               # If exited out of directory chooser, warn user
+        # If exited out of directory chooser without picking location, warn user
+        if not directory:                                                                               
             self.statusVar.set('No directory chosen')
             self.statusLabel['fg'] = "red"
             return
-        for k,u in enumerate([*self.urls]):                                                             # Download all added URLs
+
+        vidNames = []
+        # Download all added URLs, single and from playlist
+        # TODO right now cut video doesnt get tags....
+        for k,u in enumerate([*self.urls]):           
+
+            # Update status frame                                                  
             self.statusVar.set('Downloading...('+str(k+1)+"/"+str(len([*self.urls]))+")")               
             self.statusLabel['fg'] = "blue"
-            self.update()                                                                              
+            self.update()       
+
+            # If URL is video and needs to be cut                                                                       
             if self.urls[u]['includeVideo'] and self.urls[u]['cut']:
+    
+                # Download the temporary video before cut
+                self.urls[u]['stream'].download(output_path=directory, filename='tempCut')      
+    
+                # Create path for temporary and final files
                 fileName = self.urls[u]['name']+'.mp4'
-                self.urls[u]['stream'].download(output_path=directory, filename='tempCut')          
                 tempPath = os.path.join(directory, 'tempCut.mp4')                                   
+                finalPath = os.path.join(directory, fileName)
+
+                # Create MoviePy video object from YouTube downloaded video
+                y = VideoFileClip(tempPath)
+
+                # Clip the video
                 low = self.urls[u]['lowCut']
                 high = self.urls[u]['highCut']
-                finalPath=os.path.join(directory, self.urls[u]['name']+'.mp4')
-                y = VideoFileClip(tempPath)
-                y=y.subclip(low,high)
-                y.write_videofile(finalPath)                                                        # Save as final path name
+                y = y.subclip(low,high)
+
+                # Save as final path name
+                y.write_videofile(finalPath)          
+
+                # Close the object and remove the temporary file                                              
                 y.close()
                 os.remove(tempPath)
                 continue
+
+            # If URL is audio
             dlReturn = self.urls[u]['stream'].download(output_path=directory, filename=self.urls[u]['name'])
+            
+            # Can just continue here because cut video is handled above and downloading direct
+            # from YouTube already gives us video file
             if self.urls[u]['includeVideo']:     
                 continue
+
+            # Format path name for '.mp3'
             fn = self.urls[u]['name']+'.mp4'
             full_path = os.path.join(directory, fn)
             output_path = dlReturn[:-1]+"3"
+
+            # Create MoviePy audio object
             clip = AudioFileClip(dlReturn)   
+
+            # Cut video if range is selected
             if self.urls[u]['cut']:
                 low = self.urls[u]['lowCut']
                 high = self.urls[u]['highCut']
                 clip = clip.subclip(low,high)
+
+            # Write out final audio file with correct bitrate and remove temporary download
             clip.write_audiofile(output_path,bitrate="320k")
             clip.close()
             os.remove(dlReturn)
-            if len(self.urls[u]['tagList']) != 0:                           # Try to match metadata with mp3 tags to add to output files
+
+            # Try to match metadata with mp3 tags to add to output files
+            if len(self.urls[u]['tagList']) != 0:                           
                 newAudioFile = eyed3Load(output_path)
-                print(output_path)
+
                 for g in self.urls[u]['tagList']:
                     if g[0] == 'Title':
                         newAudioFile.tag.title = g[1]
@@ -684,6 +845,8 @@ class App(Frame):
                     elif g[0] == "Album":
                         newAudioFile.tag.album = g[1]
                 newAudioFile.tag.save()
+
+        # If option is set, clear every URL
         if self.deleteOnDownloadVar.get():
             self.urls = {}
             self.mylist.delete('0', 'end')
@@ -692,9 +855,13 @@ class App(Frame):
             if self.previewUrlFrame != None:                                                # Destroy currently in preview frame
                 self.previewUrlFrame.destroy()
                 self.previewUrl = None
+
+        # Notify user that download is complete
         self.statusVar.set('Success! Downloaded into: '+directory)
         self.statusLabel['fg'] = "green"
         
+# Application entry-point
+# Configure Tk object and start Tkinter loop
 def main():
     root = Tk()
     root['bg'] = "#eeeeFa"

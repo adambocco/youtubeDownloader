@@ -6,7 +6,8 @@ def formatSeconds(seconds):
     seconds %= 60
     return "%d:%02d:%02d" % (hour, minutes, seconds)
 
-def addLineBreaks(string):                                                # Helper function for displaying metadata
+ # Helper function for displaying metadata
+def addLineBreaks(string):                                               
     retList = string
     for i in range(1,int(len(string)/50)+1):
         retList = retList[:i*50] + '\n' + retList[i*50:]
