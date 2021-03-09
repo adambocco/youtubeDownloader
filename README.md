@@ -1,14 +1,23 @@
-### This project is a standalone application to download YouTube videos and convert them to mp3 files. It allows single video and playlist downloads. Users can set the file names and mp3 ID3 tags. 
+## This project is a standalone application to download YouTube videos and convert them to mp3 files. It allows single video and playlist downloads. Users can set the file names and mp3 ID3 tags. 
+
+The 
 
 ## Software Dependencies:
-## Python 3 
-###    - tkinter (GUI)
-###    - pytube (YouTube downloader) 
+### Python 3 
+    - tkinter (GUI)
+    - pytube (YouTube downloader) 
 
-###    - eyed3 (mp3 tagger)
-###    - moviepy (mp4->mp3 converter)
+    - eyed3 (mp3 tagger)
+    - moviepy (mp4->mp3 converter)
 
 ## Get Started:
+
+### Quick-Start:
+
+The '/dist' folder contains a single executable file to launch the application immediately.
+
+### Install dependencies and run script 
+
 ```bash
 python3 -m pip install -r requirements.txt
 ```
