@@ -27,13 +27,13 @@ python3 dlyt.py
 
 
 ## Issues I Have Had:
-### Numpy error: Try using numpy version 1.19.3
+### Numpy error: Try using numpy version 1.19.3 when creating the executable with pyinstaller
 
 ```bash
 python3 -m pip install numpy==1.19.3
 ```
 
-### Pytube error: Make sure most recent version (10.1.0 as of 12/9/2020)
+### PyTube error: Make sure most recent version of PyTube (10.5.3 as of 3/9/2021)
 ```bash
 python3 -m pip install git+https://github.com/nficano/pytube
 ```
