@@ -12,3 +12,10 @@ def addLineBreaks(string):
     for i in range(1,int(len(string)/50)+1):
         retList = retList[:i*50] + '\n' + retList[i*50:]
     return retList
+
+def HMStoSeconds(HMS):
+    hms = HMS.split(":")
+    h = int(hms[0])
+    m = int(hms[1])
+    s = int(hms[2])
+    return (h*3600) + (m*60) + s
