@@ -783,10 +783,6 @@ class App(Frame):
 # Configure Tk object and start Tkinter loop
 def main():
     root = Tk()
-    try:
-        root.state('zoomed') # windows
-    except:
-        root.attributes('-zoomed', True) # linux
     root['bg'] = BG
     root.geometry("1200x1200")
     root.title("YouTube Downloader")
