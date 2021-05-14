@@ -14,10 +14,15 @@ class Slider(Frame):
     BAR_RADIUS = 10
     BAR_RADIUS_INNER = BAR_RADIUS-5
     DIGIT_PRECISION = '.0f' # for showing in the canvas
-    def __init__(self, master, width = 400, height = 80, min_val = 0, max_val = 1, init_lis = None, show_value = True, lowHMSVars = None, highHMSVars = None):
-        Frame.__init__(self, master, height = height, width = width)
+    def __init__(self, master, width = 400, height = 80, min_val = 0, max_val = 1, init_lis = None, show_value = True, lowHMSVars = None, highHMSVars = None, bg_color="#ffffff"):
+
+        s = Style()
+        s.configure('My.TFrame', background=bg_color)
+
+        Frame.__init__(self, master, height = height, width = width, style="My.TFrame")
         
         self.master = master
+
         if init_lis == None:
             init_lis = [min_val]
         self.init_lis = init_lis
@@ -50,8 +55,8 @@ class Slider(Frame):
             self.bars.append(bar)
 
 
-        self.canv = Canvas(self, height = self.canv_H, width = self.canv_W, bg="#bcfead")
-        self.canv.pack()
+        self.canv = Canvas(self, height = self.canv_H, width = self.canv_W, bg=bg_color, bd=0, highlightthickness=0, relief='ridge')
+        self.canv.pack(padx=10, pady=10)
         self.canv.bind("<Motion>", self._mouseMotion)
         self.canv.bind("<B1-Motion>", self._moveBar)
 
@@ -74,16 +79,22 @@ class Slider(Frame):
             self.canv.config(cursor = "")
             self.selected_idx = None
 
-    def moveBar(self, lowVarH, lowVarM, lowVarS, highVarH, highVarM, highVarS):
+    def moveBar(self, event, arg):
+        lowVarH = arg["lowH"]
+        lowVarM = arg["lowM"]
+        lowVarS = arg["lowS"]
+        highVarH = arg["highH"]
+        highVarM = arg["highM"]
+        highVarS = arg["highS"]
         try:
             secondsOne = (int(lowVarH.get())*3600) + (int(lowVarM.get())*60) + int(lowVarS.get())
             secondsTwo = (int(highVarH.get())*3600) + (int(highVarM.get())*60) + int(highVarS.get())
         except: 
-            print("Cut Range Invalid")
+            # Cut Range Invalid
             return False
 
         if secondsOne > self.max_val or secondsOne < 0 or secondsTwo > self.max_val or secondsTwo < 0:
-            print("Cut Range Out of Bounds: ", secondsOne, " : ", secondsTwo, " : MAX=",self.max_val)
+            # Cut Range Out of Bounds
             return False
 
 
@@ -155,9 +166,9 @@ class Slider(Frame):
 
         if self.show_value:
             y_value = y+Slider.BAR_RADIUS+8
-            print("TOTAL SECONDS HERE??")
+
             value = ":".join(self.stringifyHMS(self.getHMS(int(bar["TotalSeconds"]))))
-            print("ADD BAR VALUE: ",value)
+
             if (x < 30):
                 x = 30
             if x > self.W-30:
@@ -191,10 +202,9 @@ class Slider(Frame):
 
         self.bars[idx]["Pos"] = pos
         self.bars[idx]["TotalSeconds"] = pos*(self.max_val - self.min_val)+self.min_val
-        print("BAR TOTAL SECONDS: ",self.bars[idx]["TotalSeconds"])
         self.bars[idx]["Ids"] = self.__addBar(pos, self.bars[idx])
         self.bars[idx]["Hours"], self.bars[idx]["Minutes"], self.bars[idx]["Seconds"] = self.getHMS(self.bars[idx]["TotalSeconds"])
-        print("H: ",self.bars[idx]["Hours"], " M: ", self.bars[idx]["Minutes"]," S:  ",self.bars[idx]["Seconds"])
+
 
 
     def __calcPos(self, x):

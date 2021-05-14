@@ -25,6 +25,7 @@ class Downloadable:
         self.widgetIds = {}
 
         try:
+            print("Fetching URL: ", url)
             self.youtubeObject = pytube.YouTube(url)
         except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
                 pytube.exceptions.VideoPrivate, KeyError) as e:
@@ -32,7 +33,7 @@ class Downloadable:
             raise Exception
 
         self.youtubeObject = pytube.YouTube(url)
-        self.stream = self.youtubeObject.streams.filter(only_audio=(onlyAudio)).first()
+        self.stream = self.youtubeObject.streams.filter().first()
         self.length = self.youtubeObject.length
         self.name = self.youtubeObject.title
         self.displayName = self.name + " --- " + ("Audio" if self.onlyAudio else "Video")
@@ -58,6 +59,8 @@ class Downloadable:
                     "Album Artist" : None,
                     "Year" : None,
                     "Track Number" : None}
+
+        self.volumeMultiplier = 0
         
     def makeCut(self, low, high):
         if low > self.length or high > self.length or low < 0 or high < 0:
@@ -94,53 +97,83 @@ class Downloadable:
             return True
 
     def download(self, directory):
-
-        downloadedFile = self.stream.download(output_path=directory, filename='tempCut')
+        bitrate = str(int(self.stream.bitrate/1000)) + "k"
+        downloadedFile = self.stream.download(output_path=directory, filename='tempVid')
         extension = ".mp3" if self.onlyAudio else ".mp4"
         finalPath = os.path.join(directory, self.name.replace(" ", "_") + extension)
 
+        tempPath = os.path.join(directory, 'tempVid.mp4')
+
+        # Create MoviePy video object from YouTube downloaded video
+        clip = AudioFileClip(downloadedFile) if self.onlyAudio else VideoFileClip(downloadedFile)
+
+        if self.volumeMultiplier != 0:
+            newVolume = (1+self.volumeMultiplier/100)**2 if self.volumeMultiplier < 0 else self.volumeMultiplier/5
+            print("NEWVOLUME: ",newVolume)
+
+            clip = clip.volumex(newVolume)
+
         if self.cut:
-
-            tempPath = os.path.join(directory, 'tempCut.mp4')                                   
-
-            # Create MoviePy video object from YouTube downloaded video
-            clip = AudioFileClip(downloadedFile) if self.onlyAudio else VideoFileClip(downloadedFile)
 
             # Clip the video
             low = self.lowCut
             high = self.highCut
+            if low < 0:
+                low = 0
+            if high > clip.end:
+                high = clip.end
             clip = clip.subclip(low,high)
 
             # Save as final path name
 
             if (self.onlyAudio):
-                clip.write_audiofile(finalPath)
+
+                clip.write_audiofile(finalPath, bitrate=bitrate)
             else:
-                clip.write_videofile(finalPath)           
+                clip.write_videofile(finalPath, bitrate=bitrate)   
+
 
             clip.close()
             os.remove(downloadedFile)
+
+        elif self.onlyAudio:
+
+            clip.write_audiofile(finalPath, bitrate=bitrate)
+
+
+            clip.close()
+            os.remove(downloadedFile)
+
+            newAudioFile = eyed3Load(finalPath)
+
+            for tagKey, tagValue in self.tags.items():
+                if (tagValue == ""):
+                    continue
+                if tagKey == 'Title':
+                    newAudioFile.tag.title = tagValue
+                elif tagKey == 'Contributing Artists':
+                    newAudioFile.tag.artist = tagValue
+                elif tagKey == 'Album Artist':
+                    newAudioFile.tag.album_artist = tagValue
+                elif tagKey == "Track Number":
+                    try:
+                        v = int(tagValue)
+                    except:
+                        continue
+                    newAudioFile.tag.track_num = v
+                elif tagKey == "Year":
+                    newAudioFile.tag.year = tagValue
+                elif tagKey == "Album":
+                    newAudioFile.tag.album = tagValue
+            newAudioFile.tag.save()
         else:
+            
+            clip.close()
             os.rename(downloadedFile, finalPath)
+        return finalPath
 
-        # Try to match metadata with mp3 tags to add to output files
-                  
+    def previewClip(self):
+        path = self.download("./")
+        os.system("ffplay.exe " + path)
+        os.remove(path)
 
-        print("FINAL PATH: \n",finalPath)
-        newAudioFile = eyed3Load(finalPath)
-        print(newAudioFile)
-
-        for tagKey, tagValue in self.tags.items():
-            if tagKey == 'Title':
-                newAudioFile.tag.title = tagValue
-            elif tagKey == 'Contributing Artists':
-                newAudioFile.tag.artist = tagValue
-            elif tagKey == 'Album Artist':
-                newAudioFile.tag.album_artist = tagValue
-            elif tagKey == "Track Number":
-                newAudioFile.tag.track_num = tagValue
-            elif tagKey == "Year":
-                newAudioFile.tag.year = tagValue
-            elif tagKey == "Album":
-                newAudioFile.tag.album = tagValue
-        newAudioFile.tag.save()
