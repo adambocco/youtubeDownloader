@@ -1,39 +1,34 @@
-## This project is a standalone application to download YouTube videos and convert them to mp3 files. It allows single video and playlist downloads. Users can set the file names and mp3 ID3 tags. 
+# YouTube Downloader
 
-The 
+This is a desktop application for downloading videos from YouTube. It supports several features:
 
-## Software Dependencies:
-### Python 3 
-    - tkinter (GUI)
-    - pytube (YouTube downloader) 
+* Download from a URL or YouTube query
+* Fetch entire playlist or subsection of playlist
+* Apply ID3 tags to audio files
+    * Automatically apply tags from YouTube metadata and/or title
+* Trim media
+* Apply volume multiplier
+* Preview changes before downloading
 
-    - eyed3 (mp3 tagger)
-    - moviepy (mp4->mp3 converter)
 
 ## Get Started:
 
-### Quick-Start:
-
-The '/dist' folder contains a single executable file to launch the application immediately.
-
-### Install dependencies and run script 
+### Install python3 dependencies:
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
+
+### Get *ffplay*:
+**ffmpeg** includes **ffplay** which is used for previewing media modifications. Download the precompiled binaries for your system and add the **bin** folder to path.
+- https://www.ffmpeg.org/download.html
+
+### Run the script:
+
 ```bash
-python3 dlyt.py
+python3 youtubeDownloader.py
 ```
 
 
-## Issues I Have Had:
-### Numpy error: Try using numpy version 1.19.3 when creating the executable with pyinstaller
-
-```bash
-python3 -m pip install numpy==1.19.3
-```
-
-### PyTube error: Make sure most recent version of PyTube (10.5.3 as of 3/9/2021)
-```bash
-python3 -m pip install git+https://github.com/nficano/pytube
-```
+## Comments:
+If the application doesn't support a feature you would like to see, please make an issue with a use case for it and I'd be happy to implement the change.
