@@ -12,12 +12,24 @@ from requests import get as requestsGet
 from Downloadable import Downloadable
 from tkSliderWidget import Slider
 from youtubesearchpython import VideosSearch
-from helpers import formatSeconds, addLineBreaks, HMStoSeconds
+from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis
+from urllib.error import HTTPError
+import copy
 
 
 BG="#ffffff"
+
+COLOR_TOP_FRAME = "#9bafcc"
+COLOR_OPTIONS_FRAME = "#d1d7e0"
+COLOR_OPTIONS_ENTRY = "#edf3fc"
+COLOR_OPTIONS_OPTION = "#dfdcf0"
+
+COLOR_LOWER_FRAME = "#9bafcc"
+COLOR_MANIP_FRAME = "#d1d7e0"
+COLOR_MANIP_ENTRY = "#edf3fc"
+COLOR_MANIP_BUTTON = "#afcce0"
+
 COLOR_DELETE = "#feaeae"
-TITLE_FONT = ("Helvetica", 20)
 FONT_XS = ("Helvetica", 8)
 FONT_SM = ("Helvetica", 10)
 FONT_MD = ("Helvetica", 12)
@@ -42,6 +54,9 @@ class App(Frame):
         # textvariable for url entry
         self.searchVar = StringVar()                                                                                  
         self.searchVar.set("Enter a YouTube URL or Search Query")
+
+        self.onlyAudioVar = BooleanVar()
+        self.onlyAudioVar.set(False)
         
         # textvariable for name change entry 
         self.nameChangeVar = StringVar()                                                                                      
@@ -80,9 +95,6 @@ class App(Frame):
         self.allowRepeatsVar = BooleanVar()
         self.allowRepeatsVar.set(True)
 
-        self.keepTryingVar = BooleanVar()
-        self.keepTryingVar.set(True)
-
         self.triesVar = IntVar()
         self.triesVar.set(2)
 
@@ -107,32 +119,35 @@ class App(Frame):
         # textvariables for holding range to cut media
         # only active when [self.cutVar] is true
         self.cutLowerVarH = StringVar()
-        self.cutLowerVarH.set('00')
+        self.cutLowerVarH.set('0')
         self.cutLowerVarM = StringVar()
-        self.cutLowerVarM.set('00')
+        self.cutLowerVarM.set('0')
         self.cutLowerVarS = StringVar()
-        self.cutLowerVarS.set('00')
+        self.cutLowerVarS.set('0')
 
         self.cutUpperVarH = StringVar()
-        self.cutUpperVarH.set('00')
+        self.cutUpperVarH.set('0')
         self.cutUpperVarM = StringVar()
-        self.cutUpperVarM.set('00')
+        self.cutUpperVarM.set('0')
         self.cutUpperVarS = StringVar()
-        self.cutUpperVarS.set('00')
+        self.cutUpperVarS.set('0')
 
         self.previewCutLowVarH = StringVar()
-        self.previewCutLowVarH.set('00')
+        self.previewCutLowVarH.set('0')
         self.previewCutLowVarM = StringVar()
-        self.previewCutLowVarM.set('00')
+        self.previewCutLowVarM.set('0')
         self.previewCutLowVarS = StringVar()
-        self.previewCutLowVarS.set('00')
+        self.previewCutLowVarS.set('0')
 
         self.previewCutHighVarH = StringVar()
-        self.previewCutHighVarH.set('00')
+        self.previewCutHighVarH.set('0')
         self.previewCutHighVarM = StringVar()
-        self.previewCutHighVarM.set('00')
+        self.previewCutHighVarM.set('0')
         self.previewCutHighVarS = StringVar()
-        self.previewCutHighVarS.set('00')
+        self.previewCutHighVarS.set('0')
+
+        self.addCutAsNewSongVar = StringVar()
+        self.addCutAsNewSongVar.set("Name of copy")
  
 
         self.clearSearchEntryNextClick = True
@@ -148,108 +163,114 @@ class App(Frame):
     def createWidgets(self): 
 
         # Top frame widgets for adding Downloadables, downloading and other options
-        self.controlFrame = Frame(self, padx=10, pady=10, bg=BG, borderwidth=2, relief="groove", width=80)
+        self.controlFrame = Frame(self, padx=10, pady=10, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
         self.controlFrame.pack(expand=True, padx=5, pady=5)
 
-        self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=50)
-        self.searchEntry.grid(column=1, row=1, columnspan=4, padx=5, pady=5)
-        self.searchEntry.bind('<Button-1>',self.clearSearchEntry)                                             
+        self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=70, bg=COLOR_OPTIONS_ENTRY)
+        self.searchEntry.grid(row=1, column=0, columnspan=10, padx=5, pady=5)
+        self.searchEntry.bind("<Button-1>",self.clearSearchEntry)
+        self.searchEntry.bind("<Return>", self.handleFetchEvent)   
 
-        self.startDownloadButton = Button(self.controlFrame, text="Start Download", command=self.download, bg="#90be6d",width=15, height=3, padx=5, pady=7, font=FONT_LG)
-        self.startDownloadButton.grid(column=3, row=2, rowspan=2)
+        self.fetchOnlyAudioCheckbox = Checkbutton(self.controlFrame, text="Only\nAudio", variable=self.onlyAudioVar, bg=COLOR_OPTIONS_FRAME, borderwidth=1, relief="groove")
+        self.fetchOnlyAudioCheckbox.grid(row=1, rowspan=2, column=10)     
 
-        self.deleteOnDownload = Checkbutton(self.controlFrame, text="Clear List\nAfter Downloading", variable=self.deleteOnDownloadVar, bg=BG, highlightthickness=0)
-        self.deleteOnDownload.grid(column=3, row=4)
+        self.fetchButton = Button(self.controlFrame, text="Add", command= lambda : self.fetch(), bg="#f9c74f",width=10, font=FONT_MD)
+        self.fetchButton.grid(row=1, column=11, padx=5, pady=5)
 
-        self.addPlaylistAudioButton = Button(self.controlFrame, text="Playlist Audio", command= lambda : self.addPlaylist(True), bg="#f9c74f",width=15, padx=5, pady=5, font=FONT_MD)
-        self.addPlaylistAudioButton.grid(column=1, row=3)
-        
-        self.addSingleAudioButton = Button(self.controlFrame, text="Single Audio", command=lambda : self.addSingle(True), bg="#ffe3b0",width=15,  padx=5, pady=5, font=FONT_MD)
-        self.addSingleAudioButton.grid(column=1, row=2)
+        # Top right frame for controlling playlist range to be retrieved
+        self.optionsFrame = Frame(self.controlFrame, padx=5, pady=5, bg=COLOR_OPTIONS_FRAME, borderwidth=2, relief="groove")
+        self.optionsFrame.grid(padx=5, pady=5, row=3, rowspan=10, column=0, columnspan=12)
 
-        self.addPlaylistVideoButton = Button(self.controlFrame, text="Playlist Video", command=lambda : self.addPlaylist(False), bg="#f3524c",width=15, padx=5, pady=5, font=FONT_MD)
-        self.addPlaylistVideoButton.grid(column=2, row=3)
+        self.playlistRangeFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        self.playlistRangeFrame.grid(column=1, row=0)
 
-        self.addSingleVideoButton = Button(self.controlFrame, text="Single Video", command=lambda : self.addSingle(False), bg="#f3a29c",width=15, padx=5, pady=5, font=FONT_MD)
-        self.addSingleVideoButton.grid(column=2, row=2)
+        self.playlistRangeCheckbox = Checkbutton(self.playlistRangeFrame, text="Playlist range", variable=self.playlistRangeVar, bg=COLOR_OPTIONS_OPTION)
+        self.playlistRangeCheckbox.grid(column=0, columnspan=6, row=1)
+
+        self.playlistLowerRange = Entry(self.playlistRangeFrame, textvariable=self.playlistLowerRangeVar, width=4, bg=COLOR_OPTIONS_ENTRY)
+        self.playlistLowerRange.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+
+        self.playlistRangeDashLabel = Label(self.playlistRangeFrame, text="-", bg=COLOR_OPTIONS_OPTION)
+        self.playlistRangeDashLabel.grid(row=2, column=2, columnspan = 2)
+
+        self.playlistUpperRange = Entry(self.playlistRangeFrame, textvariable=self.playlistUpperRangeVar, width=4, bg=COLOR_OPTIONS_ENTRY)
+        self.playlistUpperRange.grid(row=2, column=4, columnspan=2, padx=5, pady=5)
+
+        self.allowRepeatsCheckbox = Checkbutton(self.optionsFrame, text="Allow Repeats", variable=self.allowRepeatsVar,bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        self.allowRepeatsCheckbox.grid(column=2, row=0, padx=10, pady=10)
+
+        self.keepTryingFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        self.keepTryingFrame.grid(row=0, column=3, padx=5, pady=5)
+
+        self.keepTryingLabel =Label(self.keepTryingFrame, text="Attempts to Fetch\nFrom YouTube\nBefore Skipping", bg=COLOR_OPTIONS_OPTION)
+        self.keepTryingLabel.pack(side=LEFT)
+
+        self.keepTryingEntry = Entry(self.keepTryingFrame, textvariable = self.triesVar, width=5, validate="key", validatecommand=self.vcmdInt, bg=COLOR_OPTIONS_ENTRY)
+        self.keepTryingEntry.pack(side=LEFT, padx=5, pady=5)
+        self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
+
+
+        self.addTagsFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_FRAME)
+        self.addTagsFrame.grid(row=0, column=4)
+
+        self.addMdTags = Checkbutton(self.addTagsFrame, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        self.addMdTags.pack(side=LEFT, padx=5, pady=5)
+
+        self.addTitleTags = Checkbutton(self.addTagsFrame, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        self.addTitleTags.pack(side=LEFT, padx=5, pady=5)
+
+
+        self.middleFrame = Frame(self, bg=BG)
+        self.middleFrame.pack(expand=True)
 
         # Frame below URL input, displays status of URL retrieval success, errors, and download progress
-        self.statusFrame = Frame(self, padx=10, pady=10,bg=BG, borderwidth=2, relief="groove", width=80)
-        self.statusFrame.pack(expand=True, padx=5, pady=5)
+        self.statusFrame = Frame(self.middleFrame, padx=5, pady=5,bg=COLOR_MANIP_ENTRY, borderwidth=2, relief="groove", width=80)
+        self.statusFrame.pack(side=LEFT)
 
-        self.audioCountLabel = Label(self.statusFrame, textvariable = self.audioCountVar, padx=10,font=FONT_MD, bg=BG)
+        self.audioCountLabel = Label(self.statusFrame, textvariable = self.audioCountVar, padx=10,font=FONT_MD, bg=COLOR_MANIP_ENTRY)
         self.audioCountLabel.grid(column=0, row=1)
 
-        self.videoCountLabel = Label(self.statusFrame, textvariable = self.videoCountVar, padx=10,font=FONT_MD, bg=BG)
+        self.videoCountLabel = Label(self.statusFrame, textvariable = self.videoCountVar, padx=10,font=FONT_MD, bg=COLOR_MANIP_ENTRY)
         self.videoCountLabel.grid(column=1, row=1)
 
-        self.statusLabel = Label(self.statusFrame, textvariable = self.statusVar, padx=10, font=FONT_LG, bg=BG)
+        self.statusLabel = Label(self.statusFrame, textvariable = self.statusVar, padx=10, font=FONT_LG, bg=COLOR_MANIP_ENTRY)
         self.statusLabel.grid(column=0,columnspan=2, row=2)
 
         self.deleteAllAudioBtn = Button(self.statusFrame, text="Delete All Audio", command=lambda:self.deleteAllMedia("audio"), bg=COLOR_DELETE)
-        self.deleteAllAudioBtn.grid(column=2, row=1, pady=2)
+        self.deleteAllAudioBtn.grid(column=0, columnspan=3, row=3, pady=2)
 
         self.deleteAllVideoBtn = Button(self.statusFrame, text="Delete All Video", command=lambda:self.deleteAllMedia("video"), bg=COLOR_DELETE)
-        self.deleteAllVideoBtn.grid(column=2, row=2, pady=2)
-
-        # Top right frame for controlling playlist range to be retrieved
-        self.optionsFrame = Frame(self.controlFrame, padx=5, pady=5, bg=BG, borderwidth=2, relief="groove")
-        self.optionsFrame.grid(padx=5, pady=5, row=1,rowspan=10, column=5, columnspan=3)
-
-        self.optionsLabel = Label(self.optionsFrame, text="Options:", font=FONT_MD, bg=BG)
-        self.optionsLabel.grid(column=1, row=0, padx=10, pady=10)
-
-        self.playlistRangeCheckbox = Checkbutton(self.optionsFrame, text="Playlist range", variable=self.playlistRangeVar, bg=BG)
-        self.playlistRangeCheckbox.grid(column=1, columnspan=3, row=1)
-
-        self.playlistLowerRange = Entry(self.optionsFrame, textvariable=self.playlistLowerRangeVar, width=4)
-        self.playlistLowerRange.grid(column=1, row=2)
-
-        self.playlistRangeDashLabel = Label(self.optionsFrame, text="-", bg=BG)
-        self.playlistRangeDashLabel.grid(column=2, row=2)
-
-        self.playlistUpperRange = Entry(self.optionsFrame, textvariable=self.playlistUpperRangeVar, width=4)
-        self.playlistUpperRange.grid(column=3, row=2)
-
-        self.allowRepeatsCheckbox = Checkbutton(self.optionsFrame, text="Allow Repeats", variable=self.allowRepeatsVar,bg=BG)
-        self.allowRepeatsCheckbox.grid(column=1, columnspan=3, row=3, padx=10, pady=10)
-        
-
-        self.keepTryingCheckbox = Checkbutton(self.optionsFrame, text="Tries Before Skipping\nWhen Fetching From YouTube", variable=self.keepTryingVar,bg=BG)
-        self.keepTryingCheckbox.grid(column=1, columnspan=1, row=4, padx=10, pady=10)
-
-        self.keepTryingEntry = Entry(self.optionsFrame, textvariable = self.triesVar, width=5, bg="#DDFFAA", validate="key", validatecommand=self.vcmdInt)
-        self.keepTryingEntry.grid(row=4, column=2, padx=2, pady=2)
-        self.keepTryingEntry.bind("<KeyRelease>", self.applyTries)
-
-        self.keepTryingLabel = Label(self.optionsFrame, text=str(self.triesVar.get()), bg=BG)
-        self.keepTryingLabel.grid(row=4, column=3)
-
-
-        self.addMdTags = Checkbutton(self.optionsFrame, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=BG)
-        self.addMdTags.grid(column=5, columnspan=3, row=0, rowspan=3, pady=10)
-
-        self.addTitleTags = Checkbutton(self.optionsFrame, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=BG)
-        self.addTitleTags.grid(column=5, columnspan=3, row=3,rowspan=3, pady=10)
+        self.deleteAllVideoBtn.grid(column=0, columnspan=3, row=4, pady=2)
 
         # Middle frame/scrollbox for holding URLs retrieved and ready to be customized or downloaded
 
-        self.downloadablesListFrame = Frame(self, padx=5, pady=10, bg=BG)
-        self.downloadablesListFrame.pack()
+        self.downloadablesListFrame = Frame(self.middleFrame, padx=5, pady=10, bg="#ffffff")
+        self.downloadablesListFrame.pack(side=LEFT)
 
-        self.scrollFrame = Frame(self.downloadablesListFrame, padx=5, pady=10, bg=BG)
+        self.scrollFrame = Frame(self.downloadablesListFrame, padx=5, pady=10, bg="#ffffff")
         self.scrollFrame.grid(column=1, row=2, columnspan=10)
 
         self.scroll_bar = Scrollbar(self.scrollFrame) 
         self.scroll_bar.pack(side=RIGHT, fill=Y) 
 
-        self.mylist = Listbox(self.scrollFrame, yscrollcommand=self.scroll_bar.set, width= 120, listvariable=self.downloadableListVar, exportselection=False) 
+        self.mylist = Listbox(self.scrollFrame, yscrollcommand=self.scroll_bar.set, width= 70, listvariable=self.downloadableListVar, exportselection=False, bg=COLOR_MANIP_ENTRY) 
         self.mylist.pack( side = LEFT, fill = BOTH ) 
-        self.mylist.bind("<<ListboxSelect>>", self.showUrl)
+        self.mylist.bind("<<ListboxSelect>>", self.showDownloadable)
 
         self.scroll_bar.config( command = self.mylist.yview ) 
-        self.previewFrame = Frame(self, padx=10, pady=10, bg=BG)
+
+        self.previewFrame = Frame(self, padx=10, pady=10, bg=COLOR_LOWER_FRAME)
         self.previewFrame.pack()
+
+        # Start Download Frame
+        self.startDownloadFrame = Frame(self.middleFrame, borderwidth=2, relief="groove", width=25, bg=COLOR_MANIP_ENTRY)
+        self.startDownloadFrame.pack(side=LEFT)
+
+        self.startDownloadButton = Button(self.startDownloadFrame, text="Start\nDownload", command=self.download, bg="#90be6d",width=10, font=FONT_MD)
+        self.startDownloadButton.grid( row=2, rowspan=4, column=10, columnspan=2, padx=5, pady=5)
+
+        self.deleteOnDownloadCheckbutton = Checkbutton(self.startDownloadFrame, text="Clear List\nAfter Downloading", variable=self.deleteOnDownloadVar, bg=COLOR_MANIP_ENTRY, highlightthickness=0)
+        self.deleteOnDownloadCheckbutton.grid(row=6, rowspan=2, column=10, columnspan=2, padx=5, pady=5)
 
 
     def validateInt(self, action, index, value_if_allowed,
@@ -265,21 +286,19 @@ class App(Frame):
         else:
             return False
 
-
-
     def applyTries(self,ev):
         try:
             newTries = self.triesVar.get()
         except:
-            newTries = 2
-        if newTries < 2:
-            newTries = 2
-        self.keepTryingLabel["text"] = newTries
+            newTries = 1
+        if newTries < 1:
+            newTries = 1
+        self.triesVar.set(newTries)
 
     # Shows all data retrieved from youtube and options to customize before downloading
     # Loads into preview frame (bottom frame)
     # Binds to 'self.mylist'
-    def showUrl(self, ev):                                                             
+    def showDownloadable(self, ev):                                                             
 
          # Destroy currently in preview frame to show currently selecte done
         if self.previewDownloadableFrame != None:                                               
@@ -299,122 +318,130 @@ class App(Frame):
         self.tagChangeVar.set('')
 
 
-        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=BG, borderwidth=2, relief="groove")                             
+        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")                             
         urlFrame.pack(expand=True)
 
-        urlName = Label(urlFrame, text=downloadable.name, bg=BG, font=TITLE_FONT)                                                      
+        urlName = Label(urlFrame, text=makeEllipsis(downloadable.name, 50), bg=COLOR_LOWER_FRAME, font=FONT_XL)                                                      
         urlName.grid(row=0, column=0, columnspan=3)
 
-        urlDelete = Button(urlFrame, text="Delete",command=lambda:self.deleteUrl(downloadableKey), bg="#FF9999")
+        urlDelete = Button(urlFrame, text="Delete",command=lambda:self.deleteDownloadable(downloadableKey), bg=COLOR_DELETE)
         urlDelete.grid(row=0, column=6)
 
-        urlNameChangeEntry = Entry(urlFrame, textvariable = self.nameChangeVar, width=50, bg="#bbdddd", font=("Helvetica", 16))
+        urlNameChangeEntry = Entry(urlFrame, textvariable = self.nameChangeVar, width=50, bg=COLOR_MANIP_ENTRY, font=("Helvetica", 16))
         urlNameChangeEntry.grid(row=1, column=1, columnspan=2)
 
-        urlChangeName = Button(urlFrame,text="Change Name", command=lambda:self.changeName(downloadable, urlName), bg="#99BBBB", height=2)
+        urlChangeName = Button(urlFrame,text="Change Name", command=lambda:self.changeName(downloadable, urlName), bg=COLOR_MANIP_BUTTON, height=2)
         urlChangeName.grid(row=1, column=3, columnspan=1, padx=5)
 
-        mediaManipulationFrame = Frame(urlFrame, bg=BG)
+        mediaManipulationFrame = Frame(urlFrame, bg=COLOR_LOWER_FRAME)
         mediaManipulationFrame.grid(row=4,column=0,columnspan=20)
 
-        urlInfoAndCutFrame = Frame(urlFrame, bg=BG, borderwidth=2, relief="groove")
+        urlInfoAndCutFrame = Frame(urlFrame, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")
         urlInfoAndCutFrame.grid(row=3, column=1)
 
-        optionsFrame = Frame(mediaManipulationFrame, padx=5, pady=5, bg=BG, borderwidth=2, relief="groove")
+        optionsFrame = Frame(mediaManipulationFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
         optionsFrame.grid(row=0, column=0, padx=10, pady=10)
 
-        cutLabel = Label(optionsFrame, text="Cut Media:", font=("Helvetica",16), bg=BG)
+        cutLabel = Label(optionsFrame, text="Cut Media:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
         cutLabel.grid(row=0, column=1, columnspan=5, pady=3)
 
+
+
         # <----- CUT SLIDER FOR BOTH LOW-CUT AND HIGH-CUT----->
-        cutSlider = Slider(optionsFrame, width = 400, height = 60, min_val = 0, max_val = downloadable.length, init_lis = [downloadable.lowCut, downloadable.highCut], show_value = True,
+        self.cutSlider = Slider(optionsFrame, width = 400, height = 60, min_val = 0, max_val = downloadable.length, init_lis = [downloadable.lowCut, downloadable.highCut], show_value = True, bg_color=COLOR_MANIP_FRAME,
                              lowHMSVars=[self.previewCutLowVarH,  self.previewCutLowVarM,  self.previewCutLowVarS],
                              highHMSVars=[self.previewCutHighVarH,  self.previewCutHighVarM,  self.previewCutHighVarS])
-        cutSlider.grid(column=1, columnspan=20, row=3)
+        self.cutSlider.grid(column=1, columnspan=20, row=3)
+        self.cutSlider.bind("<ButtonRelease-1>", lambda event, arg=(downloadable, self.cutSlider): self.makeCut(event, arg))
+
+        
 
         # <----- CUT TEXT INPUTS AND LABELS (H[____] M[____] S[____] --TO-- H[____] M[____] S[____]) ----->
 
-        cutVarArgs = {  "lowH":self.previewCutLowVarH, 
-                        "lowM":self.previewCutLowVarM,
-                        "lowS":self.previewCutLowVarS,
-                        "highH": self.previewCutHighVarH,
-                        "highM":self.previewCutHighVarM,
-                        "highS":self.previewCutHighVarS
-                     }
 
-        labelH = Label(optionsFrame, text="H", bg=BG)
+        labelH = Label(optionsFrame, text="H", bg=COLOR_MANIP_FRAME)
         labelH.grid(row=1, column=1)
-        lowH = Entry(optionsFrame, textvariable = self.previewCutLowVarH, width=5, bg="#DDFFAA", )
+        lowH = Entry(optionsFrame, textvariable = self.previewCutLowVarH, width=5, bg=COLOR_MANIP_ENTRY)
         lowH.grid(row=1, column=2, padx=2, pady=2)
-        lowH.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
+        lowH.bind("<FocusOut>", self.handleCutEntry)
+        lowH.bind("<Return>", self.handleCutEntry)
         
-        labelM = Label(optionsFrame, text="M", bg=BG)
+        labelM = Label(optionsFrame, text="M", bg=COLOR_MANIP_FRAME)
         labelM.grid(row=1, column=3)
-        lowM = Entry(optionsFrame, textvariable = self.previewCutLowVarM, width=5, bg="#DDFFAA", )
+        lowM = Entry(optionsFrame, textvariable = self.previewCutLowVarM, width=5, bg=COLOR_MANIP_ENTRY)
         lowM.grid(row=1, column=4, padx=2, pady=2)
-        lowM.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
+        lowH.bind("<FocusOut>", self.handleCutEntry)
+        lowM.bind("<Return>", self.handleCutEntry)
 
-        labelS = Label(optionsFrame, text="S", bg=BG)
+        labelS = Label(optionsFrame, text="S", bg=COLOR_MANIP_FRAME)
         labelS.grid(row=1, column=5)
-        lowS = Entry(optionsFrame, textvariable = self.previewCutLowVarS, width=5, bg="#DDFFAA", )
+        lowS = Entry(optionsFrame, textvariable = self.previewCutLowVarS, width=5, bg=COLOR_MANIP_ENTRY)
         lowS.grid(row=1, column=6, padx=2, pady=2)
-        lowS.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
+        lowS.bind("<FocusOut>", self.handleCutEntry)
+        lowS.bind("<Return>", self.handleCutEntry)
 
-        labelTo = Label(optionsFrame, text="--TO--", bg=BG)
+        labelTo = Label(optionsFrame, text="--TO--", bg=COLOR_MANIP_FRAME)
         labelTo.grid(row=1, column=7, padx=4, pady=2)
 
-        labelH = Label(optionsFrame, text="H", bg=BG)
+        labelH = Label(optionsFrame, text="H", bg=COLOR_MANIP_FRAME)
         labelH.grid(row=1, column=8)
-        highH = Entry(optionsFrame, textvariable = self.previewCutHighVarH, width=5, bg="#DDFFAA", )
+        highH = Entry(optionsFrame, textvariable = self.previewCutHighVarH, width=5, bg=COLOR_MANIP_ENTRY)
         highH.grid(row=1, column=9, padx=2, pady=2)
-        highH.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
+        highH.bind("<FocusOut>", self.handleCutEntry)
+        highH.bind("<Return>", self.handleCutEntry)
 
-        labelM = Label(optionsFrame, text="M", bg=BG)
+        labelM = Label(optionsFrame, text="M", bg=COLOR_MANIP_FRAME)
         labelM.grid(row=1, column=10)
-        highM = Entry(optionsFrame, textvariable = self.previewCutHighVarM, width=5, bg="#DDFFAA", )
+        highM = Entry(optionsFrame, textvariable = self.previewCutHighVarM, width=5, bg=COLOR_MANIP_ENTRY)
         highM.grid(row=1, column=11, padx=2, pady=2)
-        highM.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
+        highM.bind("<FocusOut>", self.handleCutEntry)
+        highM.bind("<Return>", self.handleCutEntry)
 
-        labelS = Label(optionsFrame, text="S", bg=BG)
+        labelS = Label(optionsFrame, text="S", bg=COLOR_MANIP_FRAME)
         labelS.grid(row=1, column=12)
-        highS = Entry(optionsFrame, textvariable = self.previewCutHighVarS, width=5, bg="#DDFFAA", )
+        highS = Entry(optionsFrame, textvariable = self.previewCutHighVarS, width=5, bg=COLOR_MANIP_ENTRY)
         highS.grid(row=1, column=13, padx=2, pady=2)
-        highS.bind("<FocusOut>", lambda event, arg=cutVarArgs: cutSlider.moveBar(event, arg))
-
-        cutRangeBtn = Button(optionsFrame, text="Make Cut",command= lambda:self.makeCut(downloadable, cutSlider), font=("Helvetica", 14), bg="#e9f9a9")
-        cutRangeBtn.grid(column=1, columnspan=5, row=4, pady=5)
+        highS.bind("<FocusOut>", self.handleCutEntry)
+        highS.bind("<Return>", self.handleCutEntry)
 
         if downloadable.cut:
             formattedInfo = self.formatCutInfo(downloadable.lowCut, downloadable.highCut, downloadable.length)
         else:
             formattedInfo = "Length: " + downloadable.getLengthString()
 
-        urlInfo = Label(optionsFrame, text=formattedInfo, bg=BG)
+        urlInfo = Label(optionsFrame, text=formattedInfo, bg=COLOR_MANIP_FRAME)
         urlInfo.grid(row=4, column=6, columnspan=10)
+
+        addCutAsNewSongEntry = Entry(optionsFrame, textvariable=self.addCutAsNewSongVar, bg=COLOR_MANIP_ENTRY)
+        addCutAsNewSongEntry.grid(row=4, column=1, columnspan=6)
+        addCutAsNewSongEntry.bind("<Button-1>", self.clearAddCutAsNewSongEntry)
+
+        addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=lambda:self.addCutAsNewSong(downloadable))
+        addCutAsNewSongButton.grid(row=5, column=1, columnspan=6)
 
         # Add metadata tags if downloading audio only
         # TODO: Add support for adding tags to .mp4
 
-        metadataTagsFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=BG)
+        metadataTagsFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
         metadataTagsFrame.grid(row=0, column=1, padx=10, pady=2)
 
-        metadataLabel = Label(metadataTagsFrame, text="Format ID3 Tags:", font=("Helvetica",16), bg=BG)
+        metadataLabel = Label(metadataTagsFrame, text="Format ID3 Tags:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
         metadataLabel.grid(row=0, column=1, pady=2)
 
         if downloadable.onlyAudio:
-            urlTags = Frame(metadataTagsFrame, padx=5, pady=5, bg=BG)
+            urlTags = Frame(metadataTagsFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME)
             urlTags.grid(row=3, column=1, columnspan=10, padx=5, pady=5)
 
-            urlTagsTitle = Label(urlTags, text="Tags: ", font=("Helvetica",14), bg=BG)
+            urlTagsTitle = Label(urlTags, text="Tags: ", font=("Helvetica",14), bg=COLOR_MANIP_FRAME)
             urlTagsTitle.pack(side=LEFT)
 
             for tag in [*downloadable.tags]:       
                 if downloadable.tags[tag] != "":                                  # Load any tags previously selected
-                    tagDeleteFrame = Frame(urlTags, borderwidth=2, relief="groove", bg=BG)
+                    tagDeleteFrame = Frame(urlTags, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
                     tagDeleteFrame.pack(side=BOTTOM)
-                    tagDeleteButton = Button(tagDeleteFrame, text="X",bg="#ff6655")
+                    tagDeleteButton = Button(tagDeleteFrame, text="X",bg=COLOR_DELETE)
                     tagDeleteButton.pack(side=LEFT)
-                    urlTagsTitle = Label(tagDeleteFrame, text=tag+" : "+downloadable.tags[tag], bg=BG)
+                    urlTagsTitle = Label(tagDeleteFrame, text=tag+" : "+downloadable.tags[tag], bg=COLOR_MANIP_FRAME)
                     urlTagsTitle.pack(side=LEFT)
                     downloadable.tagIds[tag] = tagDeleteFrame
                     downloadable.tagIds[tag+"Label"] = urlTagsTitle
@@ -423,30 +450,30 @@ class App(Frame):
                 
             tagSelect = OptionMenu(metadataTagsFrame, self.tagVar, *ID3_TAG_OPTIONS)
             tagSelect.grid(row=1, column=1, columnspan=5,padx=3)
-            tagSelect.config(width=40, bg="#DDFFAA")
+            tagSelect.config(width=40, bg=COLOR_MANIP_ENTRY)
 
-            tagEntry = Entry(metadataTagsFrame, textvariable = self.tagChangeVar, width=40, bg="#DDFFAA")
+            tagEntry = Entry(metadataTagsFrame, textvariable = self.tagChangeVar, width=40, bg=COLOR_MANIP_ENTRY)
             tagEntry.grid(row=2, column=1, columnspan=3, padx=10, pady=5)
             tagEntry.bind('<Button-1>', self.clearTagEntry)
 
-            addTag = Button(metadataTagsFrame, text="Add Tag",command=lambda:self.addTag(downloadable.displayName), bg="#DDFFAA")
+            addTag = Button(metadataTagsFrame, text="Add Tag",command=lambda:self.addTag(downloadable.displayName), bg=COLOR_MANIP_ENTRY)
             addTag.grid(row=2, column=4, columnspan=1, padx=5, pady=5)
 
             downloadable.widgetIds["urlTags"] = urlTags
 
         self.volumeVar.set(downloadable.volumeMultiplier)
 
-        volumeMultiplierFrame = Frame(mediaManipulationFrame, bg=BG, borderwidth=2, relief="groove")
+        volumeMultiplierFrame = Frame(mediaManipulationFrame, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
         volumeMultiplierFrame.grid(row=0, column=3)
 
-        volumeSliderLabel = Label(volumeMultiplierFrame, text="Volume\nAdjust",font=("Helvetica",16), bg=BG)
+        volumeSliderLabel = Label(volumeMultiplierFrame, text="Volume\nAdjust",font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
         volumeSliderLabel.grid(row=0, column=0)
 
-        volumeSlider = Scale(volumeMultiplierFrame, variable=self.volumeVar, from_=100, to=-100, length=150, bg=BG, bd=0, highlightthickness=0, relief='ridge')
+        volumeSlider = Scale(volumeMultiplierFrame, variable=self.volumeVar, from_=100, to=-100, length=150, bg=COLOR_MANIP_FRAME, bd=0, highlightthickness=0, relief='ridge')
         volumeSlider.grid(row=1, column=0, padx=10, pady=10)
         volumeSlider.bind("<ButtonRelease-1>", lambda event, arg=downloadable: self.applyVolumeMultiplier(event, arg))
 
-        volumeEntry = Entry(volumeMultiplierFrame, textvariable = self.volumeVar, width=5, bg="#DDFFAA", )
+        volumeEntry = Entry(volumeMultiplierFrame, textvariable = self.volumeVar, width=5, bg=COLOR_MANIP_ENTRY)
         volumeEntry.grid(row=1, column=1, padx=2, pady=2)
         volumeEntry.bind("<KeyRelease>", lambda event, arg=downloadable: self.applyVolumeMultiplier(event, arg))
 
@@ -454,12 +481,12 @@ class App(Frame):
         img = Image.open(BytesIO(imgUrl.content))
         img = img.resize((160,90))
         render = ImageTk.PhotoImage(img)
-        imageLabel = Label(urlFrame, image=render, width=160, height=90, bg=BG)
+        imageLabel = Label(urlFrame, image=render, width=160, height=90, bg=COLOR_LOWER_FRAME)
         imageLabel.grid(row=0,rowspan=2,column=5)
         imageLabel.image = render
 
 
-        videoPreviewButton = Button(mediaManipulationFrame, text="Preview Video" ,command=downloadable.previewClip, bg="#DDFFAA")
+        videoPreviewButton = Button(mediaManipulationFrame, text="Preview Video" ,command=downloadable.previewClip, bg=COLOR_MANIP_BUTTON)
         videoPreviewButton.grid(row=2, column=0, columnspan=5, padx=5, pady=5)
     
 
@@ -470,13 +497,35 @@ class App(Frame):
         self.previewDownloadableFrame = urlFrame
         self.previewDownloadable = downloadable.displayName
 
-    def resetVolumeSlider(self):
-        self.volumeVar.set(0)
+    def clearAddCutAsNewSongEntry(self, ev):
+        self.addCutAsNewSongVar.set("")
+
+    def addCutAsNewSong(self, downloadable):
+        newName = self.addCutAsNewSongVar.get()
+        newDisplayName = newName + " --- " + ("Audio" if downloadable.onlyAudio else "Video")
+        if newDisplayName in self.downloadables.keys():
+            self.addCutAsNewSongVar.set("Name Taken")
+            return
+
+        newDownloadable = Downloadable(downloadable.url, downloadable.onlyAudio, youtubeObject=downloadable.youtubeObject)
+        newDownloadable.name = newName
+        newDownloadable.changeCut(downloadable.lowCut, downloadable.highCut)
+        self.downloadables[newDisplayName] = newDownloadable
+        self.mylist.insert(END, newDisplayName) 
+        if downloadable.onlyAudio:
+            self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
+        else:
+            self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
+        self.addCutAsNewSongVar.set("")
+        
+
+    def handleCutEntry(self, ev):
+        self.cutSlider.moveBar()
 
     def applyVolumeMultiplier(self, event, downloadable):
         downloadable.volumeMultiplier = int(self.volumeVar.get())
 
-    def deleteUrl(self, downloadableKey):
+    def deleteDownloadable(self, downloadableKey):
         downloadable = self.downloadables[downloadableKey]
         downloadable.widgetIds["urlFrame"].destroy()                                       
         self.previewDownloadable = None
@@ -497,7 +546,9 @@ class App(Frame):
 
     # Handles cutting in URL preview frame after fetching
     # When user makes a cut on a song or video, calculate and save new range
-    def makeCut(self, downloadable, slider):
+    def makeCut(self, event, dlAndSlider):
+        downloadable = dlAndSlider[0]
+        slider = dlAndSlider[1]
         low, high = slider.getValues()
         low = int(low)
         high = int(high)
@@ -509,17 +560,19 @@ class App(Frame):
     # Handle changing name 
     def changeName(self, downloadable, nameLabel):
         oldKey = downloadable.displayName
-        newName = self.nameChangeVar.get()
-        nameLabel.config(text=newName)
+        newDisplayName = self.nameChangeVar.get()
+        nameLabel.config(text=makeEllipsis(newDisplayName,50))
         self.mylist.delete(self.mylist.curselection()[0])
-        downloadable.name = newName
-        downloadable.displayName =  newName + " --- " + ("Audio" if downloadable.onlyAudio else "Video")
+        downloadable.name = newDisplayName
+        downloadable.displayName =  newDisplayName + " --- " + ("Audio" if downloadable.onlyAudio else "Video")
         self.downloadables[downloadable.displayName] = self.downloadables.pop(oldKey)
         self.previewDownloadable = downloadable.displayName
 
         # Update media tag at the end of URL in list view
         self.mylist.insert(END, downloadable.displayName) 
         self.mylist.selection_set('end') 
+
+
 
 
     def deleteAll(self):
@@ -595,7 +648,6 @@ class App(Frame):
         downloadable.tagIds[arg["tagKey"]] = None
 
     def clearSearchEntry(self, ev):
-        self.searchEntry['bg'] = "white" 
         if self.clearSearchEntryNextClick:
             self.clearSearchEntryNextClick = False
             self.searchVar.set('')
@@ -605,17 +657,13 @@ class App(Frame):
             self.clearTagEntryNextClick = False
             self.tagChangeVar.set('')
 
+
+
     # < ---------- On click event handlers ---------- >
 
     # Fetch entire playlist from single URL
-    def addPlaylist(self, onlyAudio):
-        inputPlaylist = self.searchVar.get()
-
-        try:
-            playlistUrls = pytube.Playlist(inputPlaylist).video_urls
-        except KeyError:
-            self.updateStatus("Failed to fetch playlist", "red")
-            return
+    def addPlaylist(self, playlistUrls):
+        onlyAudio = self.onlyAudioVar.get()
 
         # Some URLs may fail to load
         totalCount = str(len(playlistUrls))
@@ -639,51 +687,101 @@ class App(Frame):
         for url in playlistUrls:
 
             # Check if single URL of playlist is already in list
-            downloadable = self.addUrl(onlyAudio, url)
+            downloadable = self.fetchFromSingleUrl(url)
             if downloadable == False:
                 continue
+            else:
+                self.addSingleUrl(downloadable)
 
             successCount+=1
 
-            self.updateStatus("Succeeded: "+str(successCount) + "/" + str(len(playlistUrls)) +" : Total: "+totalCount, "blue")
-        
-
+            self.updateStatus("Succeeded: "+str(successCount) + "/" + totalCount, "blue")
 
         # When all URLs in playlist have been processed, 
         self.clearSearchEntryNextClick = True
         self.updateStatus('Done! : Succeeded: '+str(successCount)+" : Failed: "+str(int(totalCount)-successCount), "green")
         
 
-    # Fetch a single URL
-    def addSingle(self, onlyAudio):
-        url = self.searchVar.get()
-        self.updateStatus('Fetching video from YouTube...', "blue")
-        if self.addUrl(onlyAudio, url) != False:
-            self.updateStatus('Success!', "green")
+    def handleFetchEvent(self, event):
+        self.fetch()
+
+    def fetch(self):
+        userInput = self.searchVar.get()
+
+        if userInput=="" or userInput=="Enter a YouTube URL or Search Query":
+            self.updateStatus("Enter a URL or Search Query", "red")
+            return False
+        
+        if self.fetchFromYoutube(userInput) == False:
+            self.updateStatus("Failed to Add\n" + makeEllipsis(userInput,25), "red")
 
 
-    def addUrl(self, onlyAudio, url):
+    def fetchFromYoutube(self, userInput):
 
-        urlFromQuery = False
+        onlyAudio = self.onlyAudioVar.get()
 
-        try:
-            downloadable = Downloadable(url, onlyAudio)
-        except Exception as e:
-            print(e)
-            if url=="" or url=="Enter a YouTube URL or Search Query":
-                self.updateStatus("Enter a URL or Search Query", "red")
+        self.updateStatus('Fetching from YouTube...', "blue")
+
+        downloadable = self.fetchFromSingleUrl(userInput)
+        if downloadable != False:
+            self.addSingleUrl(downloadable)
+            return True
+
+        downloadable = self.fetchFromQuery(userInput)
+        if downloadable != False:
+            self.addSingleUrl(downloadable)
+            return True
+        
+        playlistUrls = self.fetchFromPlaylistUrl(userInput)
+        if playlistUrls != False:
+            self.addPlaylist(playlistUrls)
+            return True
+        
+        return False
+
+
+
+
+
+    def fetchFromSingleUrl(self, url):
+        onlyAudio = self.onlyAudioVar.get()
+
+        for i in range(self.triesVar.get()):
+            print("Try: ",i, " : ",makeEllipsis(url,40))
+            try:
+                downloadable = Downloadable(url, onlyAudio)
+                return downloadable
+            # Only retry when certain errors are thrown
+            except HTTPError as e:
+                print("Retry #",(i+1))
+                continue
+            except Exception as e:
                 return False
-            else:
-                try:
-                    videosSearch = VideosSearch(url, limit = 1)
-                    searchResultUrl = videosSearch.result()['result'][0]['link']
-                    urlFromQuery = True
-                    downloadable = Downloadable(searchResultUrl, onlyAudio)
-                except:
-                    self.updateStatus("Error fetching from YouTube", "red")
-                    return False
+        return False
+
+    def fetchFromPlaylistUrl(self, url):
+        try:
+            playlistUrls = pytube.Playlist(url).video_urls
+            return playlistUrls
+        except KeyError:
+            return False
+
+    def fetchFromQuery(self, query):
+        onlyAudio = self.onlyAudioVar.get()
+        try:
+            videosSearch = VideosSearch(query, limit = 1)
+            searchResultUrl = videosSearch.result()['result'][0]['link']
+            urlFromQuery = True
+            downloadable = self.fetchFromSingleUrl(searchResultUrl)
+            return downloadable
+        except:
+            return False
 
 
+    
+
+    def addSingleUrl(self, downloadable):
+        onlyAudio = self.onlyAudioVar.get()
 
         # If URL is already in list, flash the URL entry and notify the user
 
@@ -691,12 +789,9 @@ class App(Frame):
 
         if (not self.allowRepeatsVar.get()) and urlRepeats > 0:
 
-            if len(downloadable.name) < 25:
-                statusString = downloadable.name
-            else: 
-                statusString = downloadable.name[:20] + "... "
+            statusString = makeEllipsis(downloadable.name, 18)
             statusString += "(Audio)" if downloadable.onlyAudio else "(Video)"
-            statusString += " is already in the list. Skipping"
+            statusString += " already in list.\nSkipping"
 
             self.updateStatus(statusString, "orange")
             return False
@@ -726,8 +821,8 @@ class App(Frame):
         self.mylist.insert(END, downloadable.displayName) 
         # Clear URL entry
         self.searchVar.set('')
-
-        return downloadable
+        self.updateStatus("Success!", "green")
+        return True
 
 
     def checkInDownloadables(self, downloadable):

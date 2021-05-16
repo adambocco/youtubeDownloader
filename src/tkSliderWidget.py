@@ -64,6 +64,8 @@ class Slider(Frame):
         for bar in self.bars:
             bar["Ids"] = self.__addBar(bar["Pos"], bar)
 
+    def bind(self, event, func):
+        self.canv.bind(event, func)
 
     def getValues(self):
         values = [bar["TotalSeconds"] for bar in self.bars]
@@ -79,13 +81,13 @@ class Slider(Frame):
             self.canv.config(cursor = "")
             self.selected_idx = None
 
-    def moveBar(self, event, arg):
-        lowVarH = arg["lowH"]
-        lowVarM = arg["lowM"]
-        lowVarS = arg["lowS"]
-        highVarH = arg["highH"]
-        highVarM = arg["highM"]
-        highVarS = arg["highS"]
+    def moveBar(self):
+        lowVarH = self.lowHMSVars[0]
+        lowVarM = self.lowHMSVars[1]
+        lowVarS = self.lowHMSVars[2]
+        highVarH = self.highHMSVars[0]
+        highVarM = self.highHMSVars[1]
+        highVarS = self.highHMSVars[2]
         try:
             secondsOne = (int(lowVarH.get())*3600) + (int(lowVarM.get())*60) + int(lowVarS.get())
             secondsTwo = (int(highVarH.get())*3600) + (int(highVarM.get())*60) + int(highVarS.get())
@@ -124,8 +126,8 @@ class Slider(Frame):
             secondsOne = secondsTwo
             secondsTwo = temp
         
-        lowH, lowM, lowS = self.stringifyHMS(self.getHMS(secondsOne))
-        highH, highM, highS = self.stringifyHMS(self.getHMS(secondsTwo))
+        lowH, lowM, lowS = self.getHMS(secondsOne)
+        highH, highM, highS = self.getHMS(secondsTwo)
 
         lowVarH.set(str(lowH))
         lowVarM.set(str(lowM))
@@ -134,9 +136,6 @@ class Slider(Frame):
         highVarH.set(str(highH))
         highVarM.set(str(highM))
         highVarS.set(str(highS))
-
-
-
 
 
 
@@ -217,14 +216,6 @@ class Slider(Frame):
         else:
             return pos
 
-    # def __getValue(self, idx):
-    #     """#######Not used function#####"""
-    #     bar = self.bars[idx]
-    #     ids = bar["Ids"]
-    #     x = self.canv.coords(ids[0])[0] + Slider.BAR_RADIUS
-    #     pos = self.__calcPos(x)
-    #     return pos*(self.max_val - self.min_val)+self.min_val
-
     def __checkSelection(self, x, y):
         """
         To check if the position is inside the bounding rectangle of a Bar
@@ -256,15 +247,13 @@ class Slider(Frame):
     def handleStringVars(self):
         if self.lowHMSVars != None and self.highHMSVars != None:
             twoSeconds = self.getValues()
-            lowHMS = self.stringifyHMS(self.getHMS(int(twoSeconds[0])))
+            lowHMS = self.getHMS(int(twoSeconds[0]))
             self.lowHMSVars[0].set(lowHMS[0])
             self.lowHMSVars[1].set(lowHMS[1])
             self.lowHMSVars[2].set(lowHMS[2])
 
-            highHMS = self.stringifyHMS(self.getHMS(int(twoSeconds[1])))
+            highHMS = self.getHMS(int(twoSeconds[1]))
             self.highHMSVars[0].set(highHMS[0])
             self.highHMSVars[1].set(highHMS[1])
             self.highHMSVars[2].set(highHMS[2])
     
-    def setFromHMSEntries(self):
-        twoSeconds = self.getValues()

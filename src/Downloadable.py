@@ -4,12 +4,12 @@ from moviepy.editor import AudioFileClip, VideoFileClip
 import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
 from tkinter import *
 from tkinter import filedialog as fd
-from eyed3 import load as eyed3Load
+import eyed3
 from PIL import Image, ImageTk
 from io import BytesIO
 from requests import get as requestsGet
 from tkSliderWidget import Slider
-
+from urllib.error import HTTPError
 
 
 from helpers import formatSeconds
@@ -18,21 +18,23 @@ class Downloadable:
     metadataToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}   
 
       
-    def __init__(self, url, onlyAudio):
+    def __init__(self, url, onlyAudio, youtubeObject=None):
         self.url = url
         self.onlyAudio = onlyAudio
 
         self.widgetIds = {}
 
-        try:
-            print("Fetching URL: ", url)
-            self.youtubeObject = pytube.YouTube(url)
-        except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
-                pytube.exceptions.VideoPrivate, KeyError) as e:
-            print(e)
-            raise Exception
+        if youtubeObject != None:
+            self.youtubeObject = youtubeObject
+        else:
+            try:
+                print("Fetching URL: ", url)
+                self.youtubeObject = pytube.YouTube(url)
+            except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
+                    pytube.exceptions.VideoPrivate, KeyError, HTTPError) as e:
+                raise e
 
-        self.youtubeObject = pytube.YouTube(url)
+
         self.stream = self.youtubeObject.streams.filter().first()
         self.length = self.youtubeObject.length
         self.name = self.youtubeObject.title
@@ -109,7 +111,6 @@ class Downloadable:
 
         if self.volumeMultiplier != 0:
             newVolume = (1+self.volumeMultiplier/100)**2 if self.volumeMultiplier < 0 else self.volumeMultiplier/5
-            print("NEWVOLUME: ",newVolume)
 
             clip = clip.volumex(newVolume)
 
@@ -144,28 +145,8 @@ class Downloadable:
             clip.close()
             os.remove(downloadedFile)
 
-            newAudioFile = eyed3Load(finalPath)
+            self.applyID3Tags(finalPath)
 
-            for tagKey, tagValue in self.tags.items():
-                if (tagValue == ""):
-                    continue
-                if tagKey == 'Title':
-                    newAudioFile.tag.title = tagValue
-                elif tagKey == 'Contributing Artists':
-                    newAudioFile.tag.artist = tagValue
-                elif tagKey == 'Album Artist':
-                    newAudioFile.tag.album_artist = tagValue
-                elif tagKey == "Track Number":
-                    try:
-                        v = int(tagValue)
-                    except:
-                        continue
-                    newAudioFile.tag.track_num = v
-                elif tagKey == "Year":
-                    newAudioFile.tag.year = tagValue
-                elif tagKey == "Album":
-                    newAudioFile.tag.album = tagValue
-            newAudioFile.tag.save()
         else:
             
             clip.close()
@@ -176,4 +157,21 @@ class Downloadable:
         path = self.download("./")
         os.system("ffplay.exe " + path)
         os.remove(path)
+
+
+    def applyID3Tags(self, path):
+        eyed3File = eyed3.load(path)
+
+        eyed3File.tag.title=self.tags["Title"]
+        eyed3File.tag.artist=self.tags["Contributing Artists"]
+        eyed3File.tag.album=self.tags["Album"]
+        eyed3File.tag.album_artist=self.tags["Album Artist"]
+        eyed3File.tag.year=self.tags["Year"]
+
+        try: 
+            eyed3File.tag.track_num = int(self.tags["Track Number"])
+        except ValueError:
+            pass
+    
+        eyed3File.tag.save()
 

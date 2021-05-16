@@ -19,3 +19,10 @@ def HMStoSeconds(HMS):
     m = int(hms[1])
     s = int(hms[2])
     return (h*3600) + (m*60) + s
+
+
+def makeEllipsis(string, max):
+    if len(string) > max:
+        return string[:max] + "..."
+    else:
+        return string
