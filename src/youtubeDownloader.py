@@ -1,5 +1,6 @@
 import os
 import sys
+from threading import Thread
 from moviepy.editor import AudioFileClip, VideoFileClip
 import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
 import string
@@ -540,6 +541,12 @@ class App(Frame):
 
         oldKey = self.downloadable.displayName
 
+        newKey = self.downloadable.name + " --- " + ("Audio" if onlyAudio else "Video")
+
+        if newKey in self.downloadables.keys():
+            self.specificOnlyAudioVar.set(not onlyAudio)
+            return
+
         self.downloadable.setOnlyAudio(onlyAudio)
         self.downloadableFrame.destroy()       
 
@@ -549,6 +556,14 @@ class App(Frame):
 
         self.mylist.insert(END, self.downloadable.displayName) 
         self.mylist.selection_set(END) 
+
+        if onlyAudio:
+            self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
+            self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])-1))
+        else:
+            self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])-1))
+            self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
+
         self.showDownloadable(None)
 
 
@@ -909,8 +924,9 @@ class App(Frame):
     # Handles downloading of all contents in URL list
     def download(self):
 
+        numDownloadables = len(self.downloadables)
         # Check if user entered any URLS
-        if not len(self.downloadables):                                                                       
+        if not numDownloadables:                                                                       
             self.updateStatus("No urls provided", "red")
             return
 
@@ -923,16 +939,19 @@ class App(Frame):
         
         self.updateStatus("Downloading...", "blue")
 
-        # Download all added URLs, single and from playlist
-        # TODO right now cut video doesnt get tags....
+
+        threadList = []
 
         for index, downloadable in enumerate(self.downloadables.values()):           
+   
 
-            # Update status frame                                                  
-            self.updateStatus("Downloading...(" + str(index+1) + "/" + str( len(self.downloadables) ) + ")", "blue")       
-
-            downloadable.download(directory)                                                                  
-           
+            thread = Thread(target=downloadable.download, args=(directory,))
+            threadList.append(thread)
+            thread.start()                                                         
+        
+        for index, thread in enumerate(threadList):
+            thread.join()
+            self.updateStatus("Downloading...(" + str(index+1) + "/" + str( numDownloadables ) + ")", "blue")
 
         # If option is set, clear every URL
         if self.deleteOnDownloadVar.get():
@@ -941,6 +960,9 @@ class App(Frame):
         # Notify user that download is complete
         self.updateStatus("Success! Downloaded into:\n" + (directory if len(directory) <25 else directory[:12] + "..." + directory[len(directory)-12:]), "green")
         
+
+
+
 # Application entry-point
 # Configure Tk object and start Tkinter loop
 def main():

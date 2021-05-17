@@ -111,11 +111,11 @@ class Downloadable:
 
     def download(self, directory):
         bitrate = str(int(self.stream.bitrate/1000)) + "k"
-        downloadedFile = self.stream.download(output_path=directory, filename='tempVid')
+        downloadedFile = self.stream.download(output_path=directory, filename=self.displayName+"tempVid")
         extension = ".mp3" if self.onlyAudio else ".mp4"
         finalPath = os.path.join(directory, self.name.replace(" ", "_") + extension)
 
-        tempPath = os.path.join(directory, 'tempVid.mp4')
+        tempPath = os.path.join(directory, self.displayName + "tempVid.mp4")
 
         # Create MoviePy video object from YouTube downloaded video
         clip = AudioFileClip(downloadedFile) if self.onlyAudio else VideoFileClip(downloadedFile)
