@@ -1,5 +1,7 @@
-
+import subprocess
+import threading
 import os
+import sys
 from moviepy.editor import AudioFileClip, VideoFileClip
 import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
 from tkinter import *
@@ -22,7 +24,7 @@ class Downloadable:
         self.url = url
         self.onlyAudio = onlyAudio
 
-        self.widgetIds = {}
+        self.imgUrl = None
 
         if youtubeObject != None:
             self.youtubeObject = youtubeObject
@@ -38,6 +40,8 @@ class Downloadable:
         self.stream = self.youtubeObject.streams.filter().first()
         self.length = self.youtubeObject.length
         self.name = self.youtubeObject.title
+
+        # Display name is the key for [youtubeDownloader::downloadables]
         self.displayName = self.name + " --- " + ("Audio" if self.onlyAudio else "Video")
 
         self.cut = False
@@ -46,8 +50,13 @@ class Downloadable:
 
         if len([*self.youtubeObject.metadata]) > 0:
             self.metadata = [*self.youtubeObject.metadata][0]
+            if len([*self.metadata]) > 1:
+                self.allMetadata = [*self.youtubeObject.metadata]
+            else:
+                self.allMetadata = []
         else:
             self.metadata = []
+            self.allMetadata = []
 
         self.tags = {"Title" : "",
                     "Contributing Artists" : "",
@@ -63,15 +72,17 @@ class Downloadable:
                     "Track Number" : None}
 
         self.volumeMultiplier = 0
-        
+
+    def setOnlyAudio(self, onlyAudio):
+        self.onlyAudio = onlyAudio
+        self.displayName = self.name + " --- " + ("Audio" if onlyAudio else "Video")
+
+
     def makeCut(self, low, high):
         if low > self.length or high > self.length or low < 0 or high < 0:
             return
         self.low = low
         self.high = high
-
-    def setOnlyAudio(self, onlyAudio):
-        self.stream = self.youtubeObject.streams.filter(only_audio=(onlyAudio)).first()
 
     def getLengthString(self):
         return formatSeconds(self.length)
@@ -153,14 +164,31 @@ class Downloadable:
             os.rename(downloadedFile, finalPath)
         return finalPath
 
+    # From Masoud Rahimi on Stack Overflow - 
+    # https://stackoverflow.com/questions/56370173/how-to-export-ffmpeg-into-my-python-program
+    def resource_path(self, relative_path):
+        if hasattr(sys, '_MEIPASS'):
+            return os.path.join(sys._MEIPASS, relative_path)
+        return os.path.join(os.path.abspath("."), relative_path)
+
+
+
     def previewClip(self):
         path = self.download("./")
-        os.system("ffplay.exe " + path)
-        os.remove(path)
+
+        ffplay_path = "./ffmpeg/ffplay.exe"
+
+        previewThread = popenAndCall(lambda:os.remove(path), [self.resource_path(ffplay_path), path])
+
 
 
     def applyID3Tags(self, path):
         eyed3File = eyed3.load(path)
+
+        if self.imgUrl == None:
+            self.imgUrl = requestsGet(self.youtubeObject.thumbnail_url)
+            
+        eyed3File.tag.images.set(3, BytesIO(self.imgUrl.content).getvalue(), 'image/jpeg')
 
         eyed3File.tag.title=self.tags["Title"]
         eyed3File.tag.artist=self.tags["Contributing Artists"]
@@ -174,4 +202,19 @@ class Downloadable:
             pass
     
         eyed3File.tag.save()
+        eyed3File.tag.save(version=eyed3.id3.ID3_V2_3)
 
+
+# From sagar on Semicolon World 
+# https://www.semicolonworld.com/question/56553/python-subprocess-callback-when-cmd-exits
+def popenAndCall(onExit, popenArgs):
+
+    def runInThread(onExit, popenArgs):
+        proc = subprocess.Popen(popenArgs)
+        proc.wait()
+        onExit()
+        return
+    thread = threading.Thread(target=runInThread, args=(onExit, popenArgs))
+    thread.start()
+    # returns immediately after the thread starts
+    return thread

@@ -26,3 +26,11 @@ def makeEllipsis(string, max):
         return string[:max] + "..."
     else:
         return string
+
+def breakLines(string, max):
+    lineBrokenString = ""
+    for index, char in enumerate(string):
+        if index%max == 0:
+            lineBrokenString += "\n"
+        lineBrokenString += char
+    return lineBrokenString

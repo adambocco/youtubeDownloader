@@ -5,6 +5,7 @@ import pytube                           # install from git :: python3 -m pip ins
 import string
 from tkinter import *
 from tkinter import filedialog as fd
+from tkinter import scrolledtext
 from eyed3 import load as eyed3Load
 from PIL import Image, ImageTk
 from io import BytesIO
@@ -12,9 +13,9 @@ from requests import get as requestsGet
 from Downloadable import Downloadable
 from tkSliderWidget import Slider
 from youtubesearchpython import VideosSearch
-from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis
 from urllib.error import HTTPError
-import copy
+
+from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis, breakLines
 
 
 BG="#ffffff"
@@ -96,7 +97,7 @@ class App(Frame):
         self.allowRepeatsVar.set(True)
 
         self.triesVar = IntVar()
-        self.triesVar.set(2)
+        self.triesVar.set(3)
 
         self.playlistRangeVar = BooleanVar()
         self.playlistRangeVar.set(False)
@@ -147,7 +148,10 @@ class App(Frame):
         self.previewCutHighVarS.set('0')
 
         self.addCutAsNewSongVar = StringVar()
-        self.addCutAsNewSongVar.set("Name of copy")
+        self.addCutAsNewSongVar.set("Name of Copy")
+
+        self.specificOnlyAudioVar = BooleanVar()
+        self.specificOnlyAudioVar.set(False)
  
 
         self.clearSearchEntryNextClick = True
@@ -166,7 +170,7 @@ class App(Frame):
         self.controlFrame = Frame(self, padx=10, pady=10, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
         self.controlFrame.pack(expand=True, padx=5, pady=5)
 
-        self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=70, bg=COLOR_OPTIONS_ENTRY)
+        self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=60, bg=COLOR_OPTIONS_ENTRY)
         self.searchEntry.grid(row=1, column=0, columnspan=10, padx=5, pady=5)
         self.searchEntry.bind("<Button-1>",self.clearSearchEntry)
         self.searchEntry.bind("<Return>", self.handleFetchEvent)   
@@ -242,6 +246,7 @@ class App(Frame):
         self.deleteAllVideoBtn = Button(self.statusFrame, text="Delete All Video", command=lambda:self.deleteAllMedia("video"), bg=COLOR_DELETE)
         self.deleteAllVideoBtn.grid(column=0, columnspan=3, row=4, pady=2)
 
+
         # Middle frame/scrollbox for holding URLs retrieved and ready to be customized or downloaded
 
         self.downloadablesListFrame = Frame(self.middleFrame, padx=5, pady=10, bg="#ffffff")
@@ -250,14 +255,18 @@ class App(Frame):
         self.scrollFrame = Frame(self.downloadablesListFrame, padx=5, pady=10, bg="#ffffff")
         self.scrollFrame.grid(column=1, row=2, columnspan=10)
 
-        self.scroll_bar = Scrollbar(self.scrollFrame) 
-        self.scroll_bar.pack(side=RIGHT, fill=Y) 
+        self.scroll_barY = Scrollbar(self.scrollFrame) 
+        self.scroll_barY.pack(side=RIGHT, fill=Y) 
 
-        self.mylist = Listbox(self.scrollFrame, yscrollcommand=self.scroll_bar.set, width= 70, listvariable=self.downloadableListVar, exportselection=False, bg=COLOR_MANIP_ENTRY) 
+        self.scroll_barX = Scrollbar(self.scrollFrame, orient=HORIZONTAL) 
+        self.scroll_barX.pack(side=BOTTOM, fill=X) 
+
+        self.mylist = Listbox(self.scrollFrame, yscrollcommand=self.scroll_barY.set, xscrollcommand=self.scroll_barX.set, width= 70, listvariable=self.downloadableListVar, exportselection=False, bg=COLOR_MANIP_ENTRY) 
         self.mylist.pack( side = LEFT, fill = BOTH ) 
         self.mylist.bind("<<ListboxSelect>>", self.showDownloadable)
 
-        self.scroll_bar.config( command = self.mylist.yview ) 
+        self.scroll_barY.config( command = self.mylist.yview ) 
+        self.scroll_barX.config( command = self.mylist.xview ) 
 
         self.previewFrame = Frame(self, padx=10, pady=10, bg=COLOR_LOWER_FRAME)
         self.previewFrame.pack()
@@ -306,38 +315,43 @@ class App(Frame):
             self.previewDownloadable = None
 
         # Get downloadable display name from listbox
+
         try:
-            downloadableKey = ev.widget.get(ev.widget.curselection()[0])
+            downloadableKey = self.mylist.get(self.mylist.curselection()[0])
         except IndexError:
             return
         
-        downloadable = self.downloadables[downloadableKey]
+        self.downloadable = self.downloadables[downloadableKey]
                        
         # Reset entry variables
-        self.nameChangeVar.set(downloadable.name)
+        self.nameChangeVar.set(self.downloadable.name)
         self.tagChangeVar.set('')
 
 
-        urlFrame = Frame(self.previewFrame, padx=5, pady=5, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")                             
-        urlFrame.pack(expand=True)
+        self.downloadableFrame = Frame(self.previewFrame, padx=5, pady=5, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")                             
+        self.downloadableFrame.pack(expand=True)
 
-        urlName = Label(urlFrame, text=makeEllipsis(downloadable.name, 50), bg=COLOR_LOWER_FRAME, font=FONT_XL)                                                      
-        urlName.grid(row=0, column=0, columnspan=3)
+        self.downloadableNameLabel = Label(self.downloadableFrame, text=makeEllipsis(self.downloadable.name, 50), bg=COLOR_LOWER_FRAME, font=FONT_XL)                                                      
+        self.downloadableNameLabel.grid(row=0, column=0, columnspan=3)
 
-        urlDelete = Button(urlFrame, text="Delete",command=lambda:self.deleteDownloadable(downloadableKey), bg=COLOR_DELETE)
-        urlDelete.grid(row=0, column=6)
+        deleteDownloadableButton = Button(self.downloadableFrame, text="Delete",command=self.deleteDownloadable, bg=COLOR_DELETE)
+        deleteDownloadableButton.grid(row=0, column=6)
 
-        urlNameChangeEntry = Entry(urlFrame, textvariable = self.nameChangeVar, width=50, bg=COLOR_MANIP_ENTRY, font=("Helvetica", 16))
-        urlNameChangeEntry.grid(row=1, column=1, columnspan=2)
+        self.specificOnlyAudioVar.set(self.downloadable.onlyAudio)
+        setOnlyAudioCheckbox = Checkbutton(self.downloadableFrame, text="Only\nAudio", variable=self.specificOnlyAudioVar, bg=COLOR_MANIP_ENTRY, command=self.changeMediaType, borderwidth=2, relief="groove")
+        setOnlyAudioCheckbox.grid(row=1, column=6)
 
-        urlChangeName = Button(urlFrame,text="Change Name", command=lambda:self.changeName(downloadable, urlName), bg=COLOR_MANIP_BUTTON, height=2)
-        urlChangeName.grid(row=1, column=3, columnspan=1, padx=5)
+        downloadableNameChangeEntry = Entry(self.downloadableFrame, textvariable = self.nameChangeVar, width=50, bg=COLOR_MANIP_ENTRY, font=("Helvetica", 16))
+        downloadableNameChangeEntry.grid(row=1, column=1, columnspan=2)
 
-        mediaManipulationFrame = Frame(urlFrame, bg=COLOR_LOWER_FRAME)
+        downloadableChangeNameButton = Button(self.downloadableFrame,text="Change Name", command=self.changeName, bg=COLOR_MANIP_BUTTON, height=2)
+        downloadableChangeNameButton.grid(row=1, column=3, columnspan=1, padx=5)
+
+        mediaManipulationFrame = Frame(self.downloadableFrame, bg=COLOR_LOWER_FRAME)
         mediaManipulationFrame.grid(row=4,column=0,columnspan=20)
 
-        urlInfoAndCutFrame = Frame(urlFrame, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")
-        urlInfoAndCutFrame.grid(row=3, column=1)
+        cutFrame = Frame(self.downloadableFrame, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")
+        cutFrame.grid(row=3, column=1)
 
         optionsFrame = Frame(mediaManipulationFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
         optionsFrame.grid(row=0, column=0, padx=10, pady=10)
@@ -348,11 +362,11 @@ class App(Frame):
 
 
         # <----- CUT SLIDER FOR BOTH LOW-CUT AND HIGH-CUT----->
-        self.cutSlider = Slider(optionsFrame, width = 400, height = 60, min_val = 0, max_val = downloadable.length, init_lis = [downloadable.lowCut, downloadable.highCut], show_value = True, bg_color=COLOR_MANIP_FRAME,
+        self.cutSlider = Slider(optionsFrame, width = 400, height = 60, min_val = 0, max_val = self.downloadable.length, init_lis = [self.downloadable.lowCut, self.downloadable.highCut], show_value = True, bg_color=COLOR_MANIP_FRAME,
                              lowHMSVars=[self.previewCutLowVarH,  self.previewCutLowVarM,  self.previewCutLowVarS],
                              highHMSVars=[self.previewCutHighVarH,  self.previewCutHighVarM,  self.previewCutHighVarS])
         self.cutSlider.grid(column=1, columnspan=20, row=3)
-        self.cutSlider.bind("<ButtonRelease-1>", lambda event, arg=(downloadable, self.cutSlider): self.makeCut(event, arg))
+        self.cutSlider.bind("<ButtonRelease-1>", self.makeCut)
 
         
 
@@ -404,49 +418,50 @@ class App(Frame):
         highS.bind("<FocusOut>", self.handleCutEntry)
         highS.bind("<Return>", self.handleCutEntry)
 
-        if downloadable.cut:
-            formattedInfo = self.formatCutInfo(downloadable.lowCut, downloadable.highCut, downloadable.length)
+        if self.downloadable.cut:
+            formattedCutInfo = self.formatCutInfo(self.downloadable.lowCut, self.downloadable.highCut, self.downloadable.length)
         else:
-            formattedInfo = "Length: " + downloadable.getLengthString()
+            formattedCutInfo = "Length: " + self.downloadable.getLengthString()
 
-        urlInfo = Label(optionsFrame, text=formattedInfo, bg=COLOR_MANIP_FRAME)
-        urlInfo.grid(row=4, column=6, columnspan=10)
+        self.cutInfo = Label(optionsFrame, text=formattedCutInfo, bg=COLOR_MANIP_FRAME)
+        self.cutInfo.grid(row=4, column=6, columnspan=10)
 
         addCutAsNewSongEntry = Entry(optionsFrame, textvariable=self.addCutAsNewSongVar, bg=COLOR_MANIP_ENTRY)
         addCutAsNewSongEntry.grid(row=4, column=1, columnspan=6)
         addCutAsNewSongEntry.bind("<Button-1>", self.clearAddCutAsNewSongEntry)
 
-        addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=lambda:self.addCutAsNewSong(downloadable))
+        addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=self.addCutAsNewSong)
         addCutAsNewSongButton.grid(row=5, column=1, columnspan=6)
 
         # Add metadata tags if downloading audio only
         # TODO: Add support for adding tags to .mp4
+        
+        if self.downloadable.onlyAudio:
 
-        metadataTagsFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
-        metadataTagsFrame.grid(row=0, column=1, padx=10, pady=2)
+            metadataTagsFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
+            metadataTagsFrame.grid(row=0, column=1, padx=10, pady=2)
 
-        metadataLabel = Label(metadataTagsFrame, text="Format ID3 Tags:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
-        metadataLabel.grid(row=0, column=1, pady=2)
+            metadataLabel = Label(metadataTagsFrame, text="Format ID3 Tags:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
+            metadataLabel.grid(row=0, column=1, pady=2)
 
-        if downloadable.onlyAudio:
-            urlTags = Frame(metadataTagsFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME)
-            urlTags.grid(row=3, column=1, columnspan=10, padx=5, pady=5)
 
-            urlTagsTitle = Label(urlTags, text="Tags: ", font=("Helvetica",14), bg=COLOR_MANIP_FRAME)
-            urlTagsTitle.pack(side=LEFT)
+            self.tagsFrame = Frame(metadataTagsFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME)
+            self.tagsFrame.grid(row=3, column=1, columnspan=10, padx=5, pady=5)
 
-            for tag in [*downloadable.tags]:       
-                if downloadable.tags[tag] != "":                                  # Load any tags previously selected
-                    tagDeleteFrame = Frame(urlTags, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
+            tagsTitle = Label(self.tagsFrame, text="Tags: ", font=("Helvetica",14), bg=COLOR_MANIP_FRAME)
+            tagsTitle.pack(side=LEFT)
+
+            for tagKey in [*self.downloadable.tags]:       
+                if self.downloadable.tags[tagKey] != "":                                  # Load any tags previously selected
+                    tagDeleteFrame = Frame(self.tagsFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
                     tagDeleteFrame.pack(side=BOTTOM)
                     tagDeleteButton = Button(tagDeleteFrame, text="X",bg=COLOR_DELETE)
                     tagDeleteButton.pack(side=LEFT)
-                    urlTagsTitle = Label(tagDeleteFrame, text=tag+" : "+downloadable.tags[tag], bg=COLOR_MANIP_FRAME)
-                    urlTagsTitle.pack(side=LEFT)
-                    downloadable.tagIds[tag] = tagDeleteFrame
-                    downloadable.tagIds[tag+"Label"] = urlTagsTitle
-                    data={"tagKey": tag, "tagValue": downloadable.tags[tag], 'downloadableKey':downloadable.displayName}
-                    tagDeleteButton.bind("<Button-1>", lambda event, arg=data: self.deleteTag(event, arg))
+                    tagsTitle = Label(tagDeleteFrame, text=tagKey+" : "+self.downloadable.tags[tagKey], bg=COLOR_MANIP_FRAME)
+                    tagsTitle.pack(side=LEFT)
+                    self.downloadable.tagIds[tagKey] = tagDeleteFrame
+                    self.downloadable.tagIds[tagKey+"Label"] = tagsTitle
+                    tagDeleteButton.bind("<Button-1>", lambda event, arg=tagKey: self.deleteTag(event, arg))
                 
             tagSelect = OptionMenu(metadataTagsFrame, self.tagVar, *ID3_TAG_OPTIONS)
             tagSelect.grid(row=1, column=1, columnspan=5,padx=3)
@@ -456,63 +471,107 @@ class App(Frame):
             tagEntry.grid(row=2, column=1, columnspan=3, padx=10, pady=5)
             tagEntry.bind('<Button-1>', self.clearTagEntry)
 
-            addTag = Button(metadataTagsFrame, text="Add Tag",command=lambda:self.addTag(downloadable.displayName), bg=COLOR_MANIP_ENTRY)
+            addTag = Button(metadataTagsFrame, text="Add Tag",command=self.addTag, bg=COLOR_MANIP_ENTRY)
             addTag.grid(row=2, column=4, columnspan=1, padx=5, pady=5)
 
-            downloadable.widgetIds["urlTags"] = urlTags
 
-        self.volumeVar.set(downloadable.volumeMultiplier)
+
+        self.volumeVar.set(self.downloadable.volumeMultiplier)
 
         volumeMultiplierFrame = Frame(mediaManipulationFrame, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
         volumeMultiplierFrame.grid(row=0, column=3)
 
-        volumeSliderLabel = Label(volumeMultiplierFrame, text="Volume\nAdjust",font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
+        volumeSliderLabel = Label(volumeMultiplierFrame, text="Volume Adjust:",font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
         volumeSliderLabel.grid(row=0, column=0)
 
         volumeSlider = Scale(volumeMultiplierFrame, variable=self.volumeVar, from_=100, to=-100, length=150, bg=COLOR_MANIP_FRAME, bd=0, highlightthickness=0, relief='ridge')
-        volumeSlider.grid(row=1, column=0, padx=10, pady=10)
-        volumeSlider.bind("<ButtonRelease-1>", lambda event, arg=downloadable: self.applyVolumeMultiplier(event, arg))
+        volumeSlider.grid(row=2, column=0, padx=3, pady=3)
+        volumeSlider.bind("<ButtonRelease-1>",  self.applyVolumeMultiplier)
 
-        volumeEntry = Entry(volumeMultiplierFrame, textvariable = self.volumeVar, width=5, bg=COLOR_MANIP_ENTRY)
-        volumeEntry.grid(row=1, column=1, padx=2, pady=2)
-        volumeEntry.bind("<KeyRelease>", lambda event, arg=downloadable: self.applyVolumeMultiplier(event, arg))
+        volumeEntry = Entry(volumeMultiplierFrame, width=4, textvariable = self.volumeVar, bg=COLOR_MANIP_ENTRY)
+        volumeEntry.grid(row=1, column=0, padx=2, pady=2)
+        volumeEntry.bind("<KeyRelease>", self.applyVolumeMultiplier)
 
-        imgUrl = requestsGet(downloadable.youtubeObject.thumbnail_url)
-        img = Image.open(BytesIO(imgUrl.content))
+
+        if self.downloadable.imgUrl == None:
+            self.downloadable.imgUrl = requestsGet(self.downloadable.youtubeObject.thumbnail_url)
+        img = Image.open(BytesIO(self.downloadable.imgUrl.content))
         img = img.resize((160,90))
         render = ImageTk.PhotoImage(img)
-        imageLabel = Label(urlFrame, image=render, width=160, height=90, bg=COLOR_LOWER_FRAME)
+        imageLabel = Label(self.downloadableFrame, image=render, width=160, height=90, bg=COLOR_LOWER_FRAME)
         imageLabel.grid(row=0,rowspan=2,column=5)
         imageLabel.image = render
 
 
-        videoPreviewButton = Button(mediaManipulationFrame, text="Preview Video" ,command=downloadable.previewClip, bg=COLOR_MANIP_BUTTON)
-        videoPreviewButton.grid(row=2, column=0, columnspan=5, padx=5, pady=5)
-    
+        videoPreviewButton = Button(mediaManipulationFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=self.downloadable.previewClip, bg=COLOR_MANIP_BUTTON)
+        videoPreviewButton.grid(row=2, column=0, padx=5, pady=5)
+
+        showMetadataButton = Button(mediaManipulationFrame, text="Show Metadata", command=self.showMetadata, bg=COLOR_MANIP_BUTTON)
+        showMetadataButton.grid(row=2, column=1, padx=5, pady=5)
+
 
         # Assign references to the widgets in preview frame to url dict entry                          
-        downloadable.widgetIds["urlDelete"] = urlDelete
-        downloadable.widgetIds["urlInfo"] = urlInfo
-        downloadable.widgetIds["urlFrame"] = urlFrame
-        self.previewDownloadableFrame = urlFrame
-        self.previewDownloadable = downloadable.displayName
+        self.previewDownloadableFrame = self.downloadableFrame
+        self.previewDownloadable = self.downloadable.displayName
+
+
+    def showMetadata(self):
+        metadataWindow = Toplevel(self.master)
+        metadataWindow.title("YouTube Metadata")
+        metadataWindow.geometry("400x400")
+
+        text_area = scrolledtext.ScrolledText(metadataWindow, wrap=WORD, font=FONT_SM)
+
+        formattedMetadata = ""
+
+        for index, md in enumerate(self.downloadable.allMetadata):
+
+            formattedMetadata += "<------------------------------" + str(index+1) + "------------------------------>\n" 
+            for mdKey, mdValue in md.items():
+
+                formattedMetadata += mdKey + ":\n " + mdValue + "\n\n"
+
+        text_area.insert(INSERT,formattedMetadata)
+        text_area.pack()
+
+
+    def changeMediaType(self):
+        onlyAudio = self.specificOnlyAudioVar.get()
+
+        oldKey = self.downloadable.displayName
+
+        self.downloadable.setOnlyAudio(onlyAudio)
+        self.downloadableFrame.destroy()       
+
+        self.mylist.delete(self.mylist.curselection()[0])
+        self.downloadables[self.downloadable.displayName] = self.downloadables.pop(oldKey)
+        self.previewDownloadable = self.downloadable.displayName
+
+        self.mylist.insert(END, self.downloadable.displayName) 
+        self.mylist.selection_set(END) 
+        self.showDownloadable(None)
+
 
     def clearAddCutAsNewSongEntry(self, ev):
         self.addCutAsNewSongVar.set("")
 
-    def addCutAsNewSong(self, downloadable):
+    def addCutAsNewSong(self):
         newName = self.addCutAsNewSongVar.get()
-        newDisplayName = newName + " --- " + ("Audio" if downloadable.onlyAudio else "Video")
+        newDisplayName = newName + " --- " + ("Audio" if self.downloadable.onlyAudio else "Video")
         if newDisplayName in self.downloadables.keys():
             self.addCutAsNewSongVar.set("Name Taken")
             return
+        if newName in ["", "Name of Copy", "Enter a Name", "Name Taken"]:
+            self.addCutAsNewSongVar.set("Enter a Name")
+            return
 
-        newDownloadable = Downloadable(downloadable.url, downloadable.onlyAudio, youtubeObject=downloadable.youtubeObject)
+        newDownloadable = Downloadable(self.downloadable.url, self.downloadable.onlyAudio, youtubeObject=self.downloadable.youtubeObject)
         newDownloadable.name = newName
-        newDownloadable.changeCut(downloadable.lowCut, downloadable.highCut)
+        newDownloadable.displayName = newDisplayName
+        newDownloadable.changeCut(self.downloadable.lowCut, self.downloadable.highCut)
         self.downloadables[newDisplayName] = newDownloadable
         self.mylist.insert(END, newDisplayName) 
-        if downloadable.onlyAudio:
+        if self.downloadable.onlyAudio:
             self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
         else:
             self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
@@ -522,20 +581,22 @@ class App(Frame):
     def handleCutEntry(self, ev):
         self.cutSlider.moveBar()
 
-    def applyVolumeMultiplier(self, event, downloadable):
-        downloadable.volumeMultiplier = int(self.volumeVar.get())
+    def applyVolumeMultiplier(self, event):
+        self.downloadable.volumeMultiplier = int(self.volumeVar.get())
 
-    def deleteDownloadable(self, downloadableKey):
-        downloadable = self.downloadables[downloadableKey]
-        downloadable.widgetIds["urlFrame"].destroy()                                       
+    def deleteDownloadable(self):
+        downloadableKey = self.downloadable.displayName
+        self.downloadableFrame.destroy()                                       
         self.previewDownloadable = None
         self.mylist.delete(self.mylist.curselection()[0])
-        if downloadable.onlyAudio:
+        if self.downloadable.onlyAudio:
             self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])-1))     
         else:
             self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])-1))   
 
         del self.downloadables[downloadableKey]
+
+        self.setDefaultListSelection()
 
     def formatCutInfo(self, low, high, length):
         formattedInfo = ""
@@ -546,30 +607,28 @@ class App(Frame):
 
     # Handles cutting in URL preview frame after fetching
     # When user makes a cut on a song or video, calculate and save new range
-    def makeCut(self, event, dlAndSlider):
-        downloadable = dlAndSlider[0]
-        slider = dlAndSlider[1]
-        low, high = slider.getValues()
+    def makeCut(self, event):
+        low, high = self.cutSlider.getValues()
         low = int(low)
         high = int(high)
-        if downloadable.changeCut(low, high):
-            downloadable.widgetIds['urlInfo']['text'] = self.formatCutInfo(low, high, downloadable.length)
+        if self.downloadable.changeCut(low, high):
+            self.cutInfo['text'] = self.formatCutInfo(low, high, self.downloadable.length)
         else:
-            downloadable.widgetIds['urlInfo']['text'] = "Length: " + formatSeconds(downloadable.length) +"\n"
+            self.cutInfo['text'] = "Length: " + formatSeconds(self.downloadable.length) +"\n"
 
     # Handle changing name 
-    def changeName(self, downloadable, nameLabel):
-        oldKey = downloadable.displayName
+    def changeName(self):
+        oldKey = self.downloadable.displayName
         newDisplayName = self.nameChangeVar.get()
-        nameLabel.config(text=makeEllipsis(newDisplayName,50))
+        self.downloadableNameLabel.config(text=makeEllipsis(newDisplayName,50))
         self.mylist.delete(self.mylist.curselection()[0])
-        downloadable.name = newDisplayName
-        downloadable.displayName =  newDisplayName + " --- " + ("Audio" if downloadable.onlyAudio else "Video")
-        self.downloadables[downloadable.displayName] = self.downloadables.pop(oldKey)
-        self.previewDownloadable = downloadable.displayName
+        self.downloadable.name = newDisplayName
+        self.downloadable.displayName =  newDisplayName + " --- " + ("Audio" if self.downloadable.onlyAudio else "Video")
+        self.downloadables[self.downloadable.displayName] = self.downloadables.pop(oldKey)
+        self.previewDownloadable = self.downloadable.displayName
 
         # Update media tag at the end of URL in list view
-        self.mylist.insert(END, downloadable.displayName) 
+        self.mylist.insert(END, self.downloadable.displayName) 
         self.mylist.selection_set('end') 
 
 
@@ -591,8 +650,7 @@ class App(Frame):
         for downloadableKey, downloadable in self.downloadables.items():
             if not(downloadable.onlyAudio ^ isAudio):
                 if downloadableKey == self.previewDownloadable:
-                    downloadable.widgetIds["urlFrame"].destroy()    
-                    downloadable.widgetIds                                    
+                    self.downloadableFrame.destroy()                                     
                     if self.previewDownloadableFrame != None and self.downloadables[self.previewDownloadable].onlyAudio == isAudio: 
                         self.previewDownloadableFrame.destroy()
                         self.previewDownloadable = None
@@ -609,43 +667,45 @@ class App(Frame):
         for dk in deleteList:
             del self.downloadables[dk]
 
+        self.setDefaultListSelection()
+
 
     # Manually add a metadata tag
-    def addTag(self, downloadableKey):
+    def addTag(self):
         self.clearTagEntryNextClick = True
         tagKey = self.tagVar.get()
         tagValue = self.tagChangeVar.get()
-
-        downloadable = self.downloadables[downloadableKey]
+        if tagValue in ["","Enter a Tag"]:
+            self.tagChangeVar.set("Enter a Tag")
+            return
 
         tagText = tagKey+" : "+tagValue
 
-        if downloadable.tags[tagKey] == "":
+        if self.downloadable.tags[tagKey] == "":
         # Add new tag and event handlers
-            tagDeleteFrame = Frame(downloadable.widgetIds["urlTags"], borderwidth=2, relief="groove", bg=BG)
+            tagDeleteFrame = Frame(self.tagsFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
             tagDeleteFrame.pack(side=BOTTOM)
-            tagDeleteButton = Button(tagDeleteFrame, text="X",bg="#ff6655")
+            tagDeleteButton = Button(tagDeleteFrame, text="X",bg=COLOR_DELETE)
             tagDeleteButton.pack(side=LEFT)
-            urlTagsTitle = Label(tagDeleteFrame, text=tagText, bg=BG)
-            urlTagsTitle.pack(side=LEFT)
-            downloadable.tagIds[tagKey] = tagDeleteFrame
-            downloadable.tagIds[tagKey+"Label"] = urlTagsTitle
-            data={"tagKey": tagKey, "tagValue": downloadable.tags[tagKey], 'downloadableKey':downloadable.displayName}
-            tagDeleteButton.bind("<Button-1>", lambda event, arg=data: self.deleteTag(event, arg))
+            tagsTitle = Label(tagDeleteFrame, text=tagText, bg=COLOR_MANIP_FRAME)
+            tagsTitle.pack(side=LEFT)
+            self.downloadable.tagIds[tagKey] = tagDeleteFrame
+            self.downloadable.tagIds[tagKey+"Label"] = tagsTitle
+            tagDeleteButton.bind("<Button-1>", lambda event, arg=tagKey: self.deleteTag(event, arg))
 
         else:
-            downloadable.tagIds[tagKey+"Label"].config(text=tagText)
+            self.downloadable.tagIds[tagKey+"Label"].config(text=tagText)
         self.update()
-        downloadable.tags[tagKey] = tagValue
+        self.downloadable.tags[tagKey] = tagValue
     
     # < ---------- On click event handlers ---------- >
 
-    def deleteTag(self, ev, arg):
-        downloadable = self.downloadables[arg["downloadableKey"]]
+    def deleteTag(self, ev, tagKey):
+
         ev.widget.destroy()
-        downloadable.tags[arg["tagKey"]] = ""
-        downloadable.tagIds[arg["tagKey"]].destroy()
-        downloadable.tagIds[arg["tagKey"]] = None
+        self.downloadable.tags[tagKey] = ""
+        self.downloadable.tagIds[tagKey].destroy()
+        self.downloadable.tagIds[tagKey] = None
 
     def clearSearchEntry(self, ev):
         if self.clearSearchEntryNextClick:
@@ -819,11 +879,18 @@ class App(Frame):
 
         # Create text that represents URL in URL list
         self.mylist.insert(END, downloadable.displayName) 
+
+        self.setDefaultListSelection()
+
         # Clear URL entry
         self.searchVar.set('')
         self.updateStatus("Success!", "green")
         return True
 
+    def setDefaultListSelection(self):
+        if len(self.mylist.curselection()) < 1:
+            self.mylist.selection_set(END)
+            self.showDownloadable(None)
 
     def checkInDownloadables(self, downloadable):
         urlCount = 0
@@ -872,7 +939,7 @@ class App(Frame):
             self.deleteAll()
 
         # Notify user that download is complete
-        self.updateStatus("Success! Downloaded into: " + directory, "green")
+        self.updateStatus("Success! Downloaded into:\n" + (directory if len(directory) <25 else directory[:12] + "..." + directory[len(directory)-12:]), "green")
         
 # Application entry-point
 # Configure Tk object and start Tkinter loop
