@@ -1,5 +1,6 @@
 import os
 import sys
+import traceback
 from threading import Thread
 from moviepy.editor import AudioFileClip, VideoFileClip
 import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
@@ -11,7 +12,7 @@ from eyed3 import load as eyed3Load
 from PIL import Image, ImageTk
 from io import BytesIO
 from requests import get as requestsGet
-from Downloadable import Downloadable
+from Downloadable import Downloadable, stopPreview
 from tkSliderWidget import Slider
 from youtubesearchpython import VideosSearch
 from urllib.error import HTTPError
@@ -41,6 +42,7 @@ ID3_TAG_OPTIONS = ['Title', 'Contributing Artists', 'Album', 'Album Artist', 'Ye
 
 
 class App(Frame):
+
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
@@ -52,6 +54,8 @@ class App(Frame):
 
         # Contains all [Downloadable] objects 
         self.downloadables = {}
+
+        self.tryAgainButton = None
 
         # textvariable for url entry
         self.searchVar = StringVar()                                                                                  
@@ -74,6 +78,9 @@ class App(Frame):
         self.videoCountVar = StringVar()                                                                            
         self.videoCountVar.set('Video: 0')
 
+        self.previewLabelVar = StringVar()
+        self.previewLabelVar.set("Playing:\n")
+
         # text variable for holding application status (ALL user notifications pop up here)
         self.statusVar = StringVar()
         self.statusVar.set('')
@@ -85,6 +92,8 @@ class App(Frame):
         # textvariable for holding currently selected metadata tag
         self.tagVar = StringVar()                                                                                   
         self.tagVar.set(ID3_TAG_OPTIONS[0])
+
+        self.resolutionVar = StringVar()
 
         # integer variable for volume slider
         self.volumeVar = IntVar()
@@ -425,7 +434,7 @@ class App(Frame):
             formattedCutInfo = "Length: " + self.downloadable.getLengthString()
 
         self.cutInfo = Label(optionsFrame, text=formattedCutInfo, bg=COLOR_MANIP_FRAME)
-        self.cutInfo.grid(row=4, column=6, columnspan=10)
+        self.cutInfo.grid(row=4, column=6, columnspan=10, pady=5, padx=5)
 
         addCutAsNewSongEntry = Entry(optionsFrame, textvariable=self.addCutAsNewSongVar, bg=COLOR_MANIP_ENTRY)
         addCutAsNewSongEntry.grid(row=4, column=1, columnspan=6)
@@ -475,6 +484,28 @@ class App(Frame):
             addTag = Button(metadataTagsFrame, text="Add Tag",command=self.addTag, bg=COLOR_MANIP_ENTRY)
             addTag.grid(row=2, column=4, columnspan=1, padx=5, pady=5)
 
+        else:
+            videoManipulationFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
+            videoManipulationFrame.grid(row=0, column=1, padx=10, pady=2)
+
+            videoManipulationLabel = Label(videoManipulationFrame, text="MP4 Resolution:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
+            videoManipulationLabel.grid(row=0, column=1, pady=2)
+
+            
+            self.resolutionVar.set(self.downloadable.stream.resolution)
+
+            try:
+                self.resolutionVar.v_delete("w", self.resolutionVar.trace_id)
+            except:
+                pass
+
+            self.resolutionVar.trace_id = self.resolutionVar.trace("w", lambda *args:self.downloadable.setStreamByResolution(self.resolutionVar))
+
+            resolutionSelect = OptionMenu(videoManipulationFrame, self.resolutionVar, *self.downloadable.resolutionOptions)
+            resolutionSelect.grid(row=1, column=1, columnspan=5,padx=3, pady=5)
+            resolutionSelect.config(bg=COLOR_MANIP_ENTRY)
+
+
 
 
         self.volumeVar.set(self.downloadable.volumeMultiplier)
@@ -503,17 +534,38 @@ class App(Frame):
         imageLabel.grid(row=0,rowspan=2,column=5)
         imageLabel.image = render
 
+        previewControlFrame= Frame(mediaManipulationFrame, bg=COLOR_LOWER_FRAME, borderwidth=1, relief="groove")
+        previewControlFrame.grid(row=2, column=0, padx=5, pady=5)
 
-        videoPreviewButton = Button(mediaManipulationFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=self.downloadable.previewClip, bg=COLOR_MANIP_BUTTON)
-        videoPreviewButton.grid(row=2, column=0, padx=5, pady=5)
+        videoPreviewButton = Button(previewControlFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=self.previewClip, bg=COLOR_MANIP_BUTTON)
+        videoPreviewButton.grid(row=0, column=0, padx=5, pady=5)
+
+        self.previewLabel = Label(previewControlFrame, textvariable=self.previewLabelVar, bg=COLOR_LOWER_FRAME)
+        self.previewLabel.grid(row=0, column=1, padx=3, pady=3)
+
+        stopPreviewButton = Button(previewControlFrame, text="Stop Preview", command=self.stopPreview, bg=COLOR_MANIP_BUTTON)
+        stopPreviewButton.grid(row=0, column=2, padx=5, pady=5)
 
         showMetadataButton = Button(mediaManipulationFrame, text="Show Metadata", command=self.showMetadata, bg=COLOR_MANIP_BUTTON)
-        showMetadataButton.grid(row=2, column=1, padx=5, pady=5)
-
+        showMetadataButton.grid(row=2, column=1, columnspan=2, padx=5, pady=5)
 
         # Assign references to the widgets in preview frame to url dict entry                          
         self.previewDownloadableFrame = self.downloadableFrame
         self.previewDownloadable = self.downloadable.displayName
+
+
+    def previewClip(self):
+        self.previewLabelVar.set("Loading...\n")
+        self.update()
+        self.downloadable.previewClip(self.previewLabelVar)
+        Downloadable.previewDownloadable = self.downloadable
+        self.previewLabelVar.set("Playing:\n"+makeEllipsis(Downloadable.previewDownloadable.name,20))
+
+
+    def stopPreview(self):
+        stopPreview()
+        Downloadable.previewDownloadable = None
+        self.previewLabelVar.set("Playing:\n")
 
 
     def showMetadata(self):
@@ -596,8 +648,10 @@ class App(Frame):
     def handleCutEntry(self, ev):
         self.cutSlider.moveBar()
 
+
     def applyVolumeMultiplier(self, event):
         self.downloadable.volumeMultiplier = int(self.volumeVar.get())
+
 
     def deleteDownloadable(self):
         downloadableKey = self.downloadable.displayName
@@ -613,12 +667,14 @@ class App(Frame):
 
         self.setDefaultListSelection()
 
+
     def formatCutInfo(self, low, high, length):
         formattedInfo = ""
         formattedInfo += "Original Length: " + formatSeconds(length) +"\n"
         formattedInfo += "Cut Length: " + formatSeconds(high - low) + "\n"
         formattedInfo += "Cut Range: "+ formatSeconds(low) + " - " + formatSeconds(high)
         return formattedInfo
+
 
     # Handles cutting in URL preview frame after fetching
     # When user makes a cut on a song or video, calculate and save new range
@@ -634,20 +690,22 @@ class App(Frame):
     # Handle changing name 
     def changeName(self):
         oldKey = self.downloadable.displayName
-        newDisplayName = self.nameChangeVar.get()
-        self.downloadableNameLabel.config(text=makeEllipsis(newDisplayName,50))
+        newName = self.nameChangeVar.get()
+        newDisplayName = newName + " --- " + ("Audio" if self.downloadable.onlyAudio else "Video")
+        if newDisplayName in self.downloadables.keys():
+            self.nameChangeVar.set("Name Taken")
+            return
+
+        self.downloadableNameLabel.config(text=makeEllipsis(newName,50))
         self.mylist.delete(self.mylist.curselection()[0])
-        self.downloadable.name = newDisplayName
-        self.downloadable.displayName =  newDisplayName + " --- " + ("Audio" if self.downloadable.onlyAudio else "Video")
+        self.downloadable.name = newName
+        self.downloadable.displayName =  newDisplayName
         self.downloadables[self.downloadable.displayName] = self.downloadables.pop(oldKey)
         self.previewDownloadable = self.downloadable.displayName
 
         # Update media tag at the end of URL in list view
         self.mylist.insert(END, self.downloadable.displayName) 
         self.mylist.selection_set('end') 
-
-
-
 
     def deleteAll(self):
         self.downloadables = {}
@@ -713,10 +771,9 @@ class App(Frame):
         self.update()
         self.downloadable.tags[tagKey] = tagValue
     
-    # < ---------- On click event handlers ---------- >
+
 
     def deleteTag(self, ev, tagKey):
-
         ev.widget.destroy()
         self.downloadable.tags[tagKey] = ""
         self.downloadable.tagIds[tagKey].destroy()
@@ -734,7 +791,6 @@ class App(Frame):
 
 
 
-    # < ---------- On click event handlers ---------- >
 
     # Fetch entire playlist from single URL
     def addPlaylist(self, playlistUrls):
@@ -743,6 +799,10 @@ class App(Frame):
         # Some URLs may fail to load
         totalCount = str(len(playlistUrls))
         successCount = 0
+        failCount=0
+        skippedCount=0
+        failUrls = []
+        skippedStatus = ""
 
         # If user specified a playlist range, check if it is valid, and if so, shorten [playlistUrls] accordingly
         if self.playlistRangeVar.get():
@@ -758,27 +818,45 @@ class App(Frame):
                 self.updateStatus("Invalid range (In playlist: " + str( len(playlistUrls) ) + ")", "red")
                 return
 
-
         for url in playlistUrls:
 
             # Check if single URL of playlist is already in list
             downloadable = self.fetchFromSingleUrl(url)
             if downloadable == False:
-                continue
+                failCount+=1
+                failUrls.append(url)
+
             else:
-                self.addSingleUrl(downloadable)
+                wasAdded = self.addSingleUrl(downloadable)
+                if wasAdded:
+                    successCount+=1
+                else:
+                    skippedCount+=1
+            if skippedCount > 0:
+                skippedStatus = "\nSkipped: " + str(skippedCount)
+            else:
+                skippedStatus = ""
 
-            successCount+=1
-
-            self.updateStatus("Succeeded: "+str(successCount) + "/" + totalCount, "blue")
+            self.updateStatus("Succeeded: "+str(successCount) + "/" + totalCount + "\nFailed: "+str(failCount)+"/"+totalCount + skippedStatus, "blue")
 
         # When all URLs in playlist have been processed, 
         self.clearSearchEntryNextClick = True
-        self.updateStatus('Done! : Succeeded: '+str(successCount)+" : Failed: "+str(int(totalCount)-successCount), "green")
+        self.updateStatus('Done!\nSucceeded: '+str(successCount)+" : Failed: "+str(failCount) + skippedStatus, "green")
+
+        if failCount > 0:
+            self.injectTryAgainButton(failUrls)
+
+    def injectTryAgainButton(self, failUrls):
+        if self.tryAgainButton != None:
+            self.tryAgainButton.destroy()
+
+        self.tryAgainButton = Button(self.statusFrame, text="Try "+str(len(failUrls))+" Again", bg=COLOR_MANIP_BUTTON, command=lambda:self.addPlaylist(failUrls))
+        self.tryAgainButton.grid(column=3, row=2)
         
 
     def handleFetchEvent(self, event):
         self.fetch()
+
 
     def fetch(self):
         userInput = self.searchVar.get()
@@ -815,14 +893,10 @@ class App(Frame):
         return False
 
 
-
-
-
     def fetchFromSingleUrl(self, url):
         onlyAudio = self.onlyAudioVar.get()
 
         for i in range(self.triesVar.get()):
-            print("Try: ",i, " : ",makeEllipsis(url,40))
             try:
                 downloadable = Downloadable(url, onlyAudio)
                 return downloadable
@@ -831,6 +905,8 @@ class App(Frame):
                 print("Retry #",(i+1))
                 continue
             except Exception as e:
+                print("Stopping fetch: ",e)
+                traceback.print_exc()
                 return False
         return False
 
@@ -852,8 +928,6 @@ class App(Frame):
         except:
             return False
 
-
-    
 
     def addSingleUrl(self, downloadable):
         onlyAudio = self.onlyAudioVar.get()
@@ -916,6 +990,11 @@ class App(Frame):
 
 
     def updateStatus(self, message, color):
+        try:
+            self.tryAgainButton.destroy()
+        except:
+            pass
+        self.tryAgainButton = None
         self.statusVar.set(message)
         self.statusLabel['fg'] = color
         self.update()
@@ -939,12 +1018,9 @@ class App(Frame):
         
         self.updateStatus("Downloading...", "blue")
 
-
         threadList = []
 
         for index, downloadable in enumerate(self.downloadables.values()):           
-   
-
             thread = Thread(target=downloadable.download, args=(directory,))
             threadList.append(thread)
             thread.start()                                                         
@@ -959,9 +1035,12 @@ class App(Frame):
 
         # Notify user that download is complete
         self.updateStatus("Success! Downloaded into:\n" + (directory if len(directory) <25 else directory[:12] + "..." + directory[len(directory)-12:]), "green")
-        
 
+    def pollForPreview(self):
 
+        if Downloadable.previewThread == None or Downloadable.previewThread.is_alive() == False:
+            self.previewLabelVar.set("Playing:\n")
+        self.after(2000, self.pollForPreview)
 
 # Application entry-point
 # Configure Tk object and start Tkinter loop
@@ -971,6 +1050,7 @@ def main():
     root.geometry("1200x1200")
     root.title("YouTube Downloader")
     app = App(master=root)
+    app.pollForPreview()
     app.mainloop()
 
 
