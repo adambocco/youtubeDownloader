@@ -6,9 +6,8 @@ This is a desktop application for downloading videos from YouTube. It supports s
 * Fetch entire playlist or subsection of playlist
 * Choose from available video resolutions
 * Apply ID3 tags to audio files
-    * Automatically apply tags from YouTube metadata and/or title
+    * Automatically apply tags from YouTube metadata
     * Manually adjust tags
-    * Apply cover art to files
 * Trim media
     * Easily copy trimmed media (Ex. extract songs from single video albums)
 * Apply volume multiplier

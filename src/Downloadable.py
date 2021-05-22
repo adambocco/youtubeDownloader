@@ -3,13 +3,12 @@
 
 # Make executable with: pyinstaller -F --add-data "./ffmpeg/*;./ffmpeg/" youtubeDownloader.py
 
-import subprocess
-import threading
 import multiprocessing
 import os
 import sys
 from moviepy.editor import AudioFileClip, VideoFileClip
-import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
+from requests import get as requestsGet
+import youtube_dl
 from tkinter import *
 from tkinter import filedialog as fd
 import eyed3
@@ -20,6 +19,9 @@ from tkSliderWidget import Slider
 from urllib.error import HTTPError
 from sanitize_filename import sanitize
 import pygame
+
+from Stream import Stream
+
 
 
 import ffmpeg
@@ -35,61 +37,87 @@ class Downloadable:
 
     previewClipVar = None
     previewThread = None
-    previewFile = None
+
     previewDownloadable = None
     previewLabelVar = None
 
 
-    def __init__(self, url, onlyAudio, youtubeObject=None):
-        self.url = url
+    def __init__(self, youtubeObject, onlyAudio):
+
+        self.youtubeObject = youtubeObject
+
         self.onlyAudio = onlyAudio
 
-        self.imgUrl = None
+        self.url = "https://www.youtube.com/watch?v="+youtubeObject['id']
 
-        if youtubeObject != None:
-            self.youtubeObject = youtubeObject
-        else:
-            try:
-                print("Fetching URL: ", url)
-                self.youtubeObject = pytube.YouTube(url)
-            except (pytube.exceptions.VideoUnavailable, pytube.exceptions.RegexMatchError,
-                    pytube.exceptions.VideoPrivate, KeyError, HTTPError) as e:
-                raise e
+        self.audioOnlyPostProcessor = { 
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }
 
+        self.ydl_opts = {
+            "format": "bestaudio/best",
+            "noplaylist":True,
 
-        self.streams = self.youtubeObject.streams.filter(file_extension="mp4")
+        }
 
-        self.stream = self.streams.first()
+        self.imgUrl = self.youtubeObject['thumbnail'] 
 
-        self.resolutionOptions = []
+        self.allStreams = []
+        self.streams = []
+
+        self.audioStream = None
+        self.videoStreams = []
+
         self.resolutionToStream = {}
 
-        for stream in self.youtubeObject.streams:
-            if stream.resolution != None:
-                if stream.resolution not in self.resolutionOptions:
-                    self.resolutionOptions.append(stream.resolution)
-                    self.resolutionToStream[stream.resolution] = stream
-                elif not stream.is_dash and self.resolutionToStream[stream.resolution].is_dash:
-                    self.resolutionToStream[stream.resolution] = stream
-                elif (not (stream.is_dash and not self.resolutionToStream[stream.resolution].is_dash)) and stream.fps > self.resolutionToStream[stream.resolution].fps:
-                    self.resolutionToStream[stream.resolution] = stream
-        self.resolutionOptions.sort(reverse=True, key=lambda res: int(res[:len(res)-1]))
+        for stream in self.youtubeObject["formats"]:
 
-        # By default, get highest quality stream
-        self.audioStream = self.streams.get_audio_only()
-        self.videoStream = self.resolutionToStream[self.resolutionOptions[0]]
-        for res in self.resolutionOptions:
-            if not self.resolutionToStream[res].is_dash:
-                self.videoStream = self.resolutionToStream[res]
-                break
+            try:
+                newStream = Stream(stream)
+                self.allStreams.append(newStream)
+                if newStream.mediaType == "A" and newStream.ext == "m4a":
+                    if self.audioStream != None:
+                        if newStream.stream["tbr"] > self.audioStream.stream["tbr"]:
+                            self.audioStream = newStream 
+
+                    self.audioStream = newStream
+                    self.streams.append(newStream)
+
+                elif newStream.mediaType == "V" and newStream.resolution not in self.resolutionToStream.keys():
+                    self.resolutionToStream[newStream.resolution] = newStream
+                    self.streams.append(newStream)
+                
+                elif newStream.mediaType == "AV":
+                    if newStream.resolution in self.resolutionToStream.keys():
+                        self.streams.remove(self.resolutionToStream[newStream.resolution])
+                    self.streams.append(newStream)
+
+                    self.resolutionToStream[newStream.resolution] = newStream
+
+            except Exception as e:
+                pass
+            
+        self.videoStreams = self.resolutionToStream.values()
 
         if onlyAudio:
-            self.stream = self.videoStream
+            self.stream = self.audioStream
         else:
-            self.stream = self.videoStream
+            self.stream = None
+            for videoStream in self.videoStreams:
+                if videoStream.mediaType == "AV":
+                    if self.stream == None or self.stream.resolution < videoStream.resolution:
+                        self.stream = videoStream
+            if self.stream == None:
+                self.stream = self.videoStreams[0]
 
-        self.length = self.youtubeObject.length
-        self.name = self.youtubeObject.title
+        self.videoStream = self.stream
+        self.previewStream = self.stream
+
+
+        self.length = self.youtubeObject["duration"]
+        self.name = self.youtubeObject["title"]
 
         # Display name is the key for [youtubeDownloader::downloadables]
         self.displayName = self.name + " --- " + ("Audio" if self.onlyAudio else "Video")
@@ -98,22 +126,40 @@ class Downloadable:
         self.lowCut = 0
         self.highCut = self.length
 
-        if len([*self.youtubeObject.metadata]) > 0:
-            self.metadata = [*self.youtubeObject.metadata][0]
-            if len([*self.metadata]) > 1:
-                self.allMetadata = [*self.youtubeObject.metadata]
-            else:
-                self.allMetadata = []
-        else:
-            self.metadata = []
-            self.allMetadata = []
+        self.tags = {}
 
-        self.tags = {"Title" : "",
-                    "Contributing Artists" : "",
-                    "Album" : "",
-                    "Album Artist" : "",
-                    "Year" : "",
-                    "Track Number" : ""}
+        if "track" in self.youtubeObject:
+            self.tags["Track Number"] = self.youtubeObject["track"]
+        else:
+            self.tags["Track Number"] = ""
+
+        if "year" in self.youtubeObject:
+            self.tags["Year"] = self.youtubeObject["year"]
+        else:
+            self.tags["Year"] = ""
+
+        if "album" in self.youtubeObject:
+            self.tags["Album"] = self.youtubeObject["album"]
+        else:
+             self.tags["Album"] = ""
+
+        if "album_artist" in self.youtubeObject:
+            self.tags["Album Artist"] = self.youtubeObject["album_artist"]
+        else:
+            self.tags["Album Artist"] = ""
+
+        if "artist" in self.youtubeObject:
+            self.tags["Contributing Artists"] = self.youtubeObject["artist"]
+        else:
+            self.tags["Contributing Artists"] = ""
+
+        if "track" in self.youtubeObject:
+            self.tags["Title"] = self.youtubeObject["track"]
+        else:
+            self.tags["Title"] = ""
+
+
+
         self.tagIds = {"Title" : None,
                     "Contributing Artists" : None,
                     "Album" : None,
@@ -126,7 +172,7 @@ class Downloadable:
 
     def setStreamByResolution(self, stringVar):
         resolution = stringVar.get()
-        self.stream = self.resolutionToStream[resolution]
+        self.stream = self.resolutionToStream[int(resolution)]
         self.videoStream = self.stream
 
 
@@ -138,21 +184,8 @@ class Downloadable:
         else:
             self.stream = self.videoStream
 
-
     def getLengthString(self):
         return formatSeconds(self.length)
-
-
-    def generateTagListFromMetadata(self):
-        for tagKey in [*self.metadata]:
-            if tagKey in [*Downloadable.metadataToTag]:
-                self.tags[Downloadable.metadataToTag[tagKey]] = self.metadata[tagKey]
-
-
-    def generateTagListFromTitle(self):
-        if len(self.name.split('-')) > 1:
-            self.tags["Contributing Artists"] = self.name.split('-')[0]
-            self.tags["Title"] = self.name.split('-')[1]
 
 
     def changeCut(self, low, high):
@@ -170,27 +203,17 @@ class Downloadable:
 
     def download(self, directory):
         bitrate = str(int(self.stream.bitrate/1000)) + "k"
-        videoFile = self.stream.download(output_path=directory, filename=sanitize(self.displayName)+"tempVideo")
-        downloadedFile = videoFile
-
-
-        if self.stream.is_dash and not self.onlyAudio:
-
-            audioFile = self.streams.get_audio_only().download(output_path=directory, filename=sanitize(self.displayName)+"tempAudio")
-
-            mergedOutputPath = os.path.join(os.getcwd(), sanitize(self.displayName) + "tempMerge.mp4")
-            downloadedFile = mergedOutputPath
-            self.mergeAV(audioFile, videoFile, mergedOutputPath)
-            os.remove(audioFile)
-            os.remove(videoFile)
-
-
+        url = self.stream.url
         extension = ".mp3" if self.onlyAudio else ".mp4"
         finalPath = os.path.join(directory, sanitize(self.name) + extension)
 
+        clip = AudioFileClip(url) if self.onlyAudio else VideoFileClip(url)
 
-        # Create MoviePy video object from YouTube downloaded video
-        clip = AudioFileClip(downloadedFile) if self.onlyAudio else VideoFileClip(downloadedFile)
+        if self.stream.mediaType == "V":
+            audioClip = AudioFileClip(self.audioStream.url)
+            
+            clip = clip.set_audio(audioClip)
+
 
         if self.volumeMultiplier != 0:
             newVolume = (1+self.volumeMultiplier/100)**2 if self.volumeMultiplier < 0 else self.volumeMultiplier/5
@@ -218,35 +241,25 @@ class Downloadable:
 
 
             clip.close()
-            os.remove(downloadedFile)
+
 
         elif self.onlyAudio:
 
             clip.write_audiofile(finalPath, bitrate=bitrate)
 
             clip.close()
-            os.remove(downloadedFile)
 
             self.applyID3Tags(finalPath)
 
         else:
-            
+        
+            clip.write_videofile(finalPath, threads=NUM_THREADS) 
             clip.close()
-            os.rename(downloadedFile, finalPath)
+        try:
+            clip.close()
+        except:
+            pass
         return finalPath
-
-
-    def mergeAV(self, audioPath, videoPath, outputPath):
-        proc = subprocess.Popen([FFMPEG_PATH, "-i", videoPath, "-i", audioPath, outputPath])
-        proc.wait()
-
-
-    # From Masoud Rahimi on Stack Overflow - 
-    # https://stackoverflow.com/questions/56370173/how-to-export-ffmpeg-into-my-python-program
-    def resource_path(self, relative_path):
-        if hasattr(sys, '_MEIPASS'):
-            return os.path.join(sys._MEIPASS, relative_path)
-        return os.path.join(os.path.abspath("."), relative_path)
 
 
     def previewClip(self, labelVar):
@@ -254,14 +267,6 @@ class Downloadable:
         stopPreview()
 
         labelVar.set("Playing:\n"+makeEllipsis(self.name,20))
-        if self.onlyAudio:
-            stream = self.stream
-        else:
-            stream = self.stream
-            for res in self.resolutionOptions:
-                if not self.resolutionToStream[res].is_dash:
-                    stream = self.resolutionToStream[res]
-                    break
 
         newVolume = 0
         if self.volumeMultiplier != 0:
@@ -278,9 +283,10 @@ class Downloadable:
             if high > self.length:
                 high = self.length
 
-        Downloadable.previewFile = os.path.join(os.getcwd(), "youtubeDownloaderPreviewFile.mp4")
+
         Downloadable.previewDownloadable = self
-        Downloadable.previewThread = multiprocessing.Process(target=startPreview, args=(self.onlyAudio, stream, self.cut, low, high, newVolume))
+        url = self.stream.url if self.onlyAudio else self.previewStream.url
+        Downloadable.previewThread = multiprocessing.Process(target=startPreview, args=(self.onlyAudio, url, self.cut, low, high, newVolume))
         Downloadable.previewThread.start()
         
 
@@ -289,9 +295,8 @@ class Downloadable:
 
         if self.imgUrl == None:
             self.imgUrl = requestsGet(self.youtubeObject.thumbnail_url)
-            
 
-        eyed3File.tag.images.set(3, self.imgUrl.content, 'image/jpeg')
+        eyed3File.tag.images.set(3, requestsGet(self.imgUrl).content, 'image/jpeg')
 
         eyed3File.tag.title=self.tags["Title"]
         eyed3File.tag.artist=self.tags["Contributing Artists"]
@@ -308,10 +313,13 @@ class Downloadable:
         eyed3File.tag.save(version=eyed3.id3.ID3_V2_3)
 
 
-def startPreview(onlyAudio, stream, cut, low, high, volume):
-    downloadedFile = stream.download(filename="youtubeDownloaderPreviewFile")
+def startPreview(onlyAudio, url, cut, low, high, volume):
 
-    clip = AudioFileClip(downloadedFile) if onlyAudio else VideoFileClip(downloadedFile) 
+    clip = None
+    if onlyAudio:
+        clip = AudioFileClip(url) 
+    else:
+        clip = VideoFileClip(url) 
 
     if volume != 0:
 
@@ -325,8 +333,6 @@ def startPreview(onlyAudio, stream, cut, low, high, volume):
 
     # See https://github.com/Zulko/moviepy/issues/575
     pygame.quit()
-    os.remove(downloadedFile)
-
 
 
 def stopPreview():
@@ -338,11 +344,6 @@ def stopPreview():
         except:
             pass
 
-        try:
-            os.remove(Downloadable.previewFile)
-        except:
-            pass
     Downloadable.previewThread = None
     Downloadable.previewClipVar = None
-    Downloadable.previewFile = None
     Downloadable.previewDownloadable = None

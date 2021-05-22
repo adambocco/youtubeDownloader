@@ -1,9 +1,5 @@
 import os
 import sys
-import traceback
-from threading import Thread
-from moviepy.editor import AudioFileClip, VideoFileClip
-import pytube                           # install from git :: python3 -m pip install git+https://github.com/nficano/pytube.git
 import string
 from tkinter import *
 from tkinter import filedialog as fd
@@ -16,6 +12,9 @@ from Downloadable import Downloadable, stopPreview
 from tkSliderWidget import Slider
 from youtubesearchpython import VideosSearch
 from urllib.error import HTTPError
+import youtube_dl
+import threading
+import re
 
 from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis, breakLines
 
@@ -33,6 +32,10 @@ COLOR_MANIP_ENTRY = "#edf3fc"
 COLOR_MANIP_BUTTON = "#afcce0"
 
 COLOR_DELETE = "#feaeae"
+COLOR_DISABLED = "#dddddd"
+COLOR_DOWNLOAD = "#90be6d"
+COLOR_FETCH = "#f9c74f"
+
 FONT_XS = ("Helvetica", 8)
 FONT_SM = ("Helvetica", 10)
 FONT_MD = ("Helvetica", 12)
@@ -54,6 +57,10 @@ class App(Frame):
 
         # Contains all [Downloadable] objects 
         self.downloadables = {}
+        self.downloadedCount = 0
+
+        self.fetchLock = False
+        self.downloadLock = False
 
         self.tryAgainButton = None
 
@@ -188,7 +195,7 @@ class App(Frame):
         self.fetchOnlyAudioCheckbox = Checkbutton(self.controlFrame, text="Only\nAudio", variable=self.onlyAudioVar, bg=COLOR_OPTIONS_FRAME, borderwidth=1, relief="groove")
         self.fetchOnlyAudioCheckbox.grid(row=1, rowspan=2, column=10)     
 
-        self.fetchButton = Button(self.controlFrame, text="Add", command= lambda : self.fetch(), bg="#f9c74f",width=10, font=FONT_MD)
+        self.fetchButton = Button(self.controlFrame, text="Add", command= lambda : self.fetch(), bg=COLOR_FETCH,width=10, font=FONT_MD)
         self.fetchButton.grid(row=1, column=11, padx=5, pady=5)
 
         # Top right frame for controlling playlist range to be retrieved
@@ -223,17 +230,6 @@ class App(Frame):
         self.keepTryingEntry.pack(side=LEFT, padx=5, pady=5)
         self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
 
-
-        self.addTagsFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_FRAME)
-        self.addTagsFrame.grid(row=0, column=4)
-
-        self.addMdTags = Checkbutton(self.addTagsFrame, text="Add tags from\nYouTube metadata\n(Priority 1)", variable=self.addMdTagsVar, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
-        self.addMdTags.pack(side=LEFT, padx=5, pady=5)
-
-        self.addTitleTags = Checkbutton(self.addTagsFrame, text="Add tags from title\nSplit on '-'\nEx) Artist - Song\n(Priority 2)", variable=self.addTitleTagsVar, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
-        self.addTitleTags.pack(side=LEFT, padx=5, pady=5)
-
-
         self.middleFrame = Frame(self, bg=BG)
         self.middleFrame.pack(expand=True)
 
@@ -255,7 +251,6 @@ class App(Frame):
 
         self.deleteAllVideoBtn = Button(self.statusFrame, text="Delete All Video", command=lambda:self.deleteAllMedia("video"), bg=COLOR_DELETE)
         self.deleteAllVideoBtn.grid(column=0, columnspan=3, row=4, pady=2)
-
 
         # Middle frame/scrollbox for holding URLs retrieved and ready to be customized or downloaded
 
@@ -285,7 +280,7 @@ class App(Frame):
         self.startDownloadFrame = Frame(self.middleFrame, borderwidth=2, relief="groove", width=25, bg=COLOR_MANIP_ENTRY)
         self.startDownloadFrame.pack(side=LEFT)
 
-        self.startDownloadButton = Button(self.startDownloadFrame, text="Start\nDownload", command=self.download, bg="#90be6d",width=10, font=FONT_MD)
+        self.startDownloadButton = Button(self.startDownloadFrame, text="Start\nDownload", command=self.download, bg=COLOR_DOWNLOAD,width=10, font=FONT_MD)
         self.startDownloadButton.grid( row=2, rowspan=4, column=10, columnspan=2, padx=5, pady=5)
 
         self.deleteOnDownloadCheckbutton = Checkbutton(self.startDownloadFrame, text="Clear List\nAfter Downloading", variable=self.deleteOnDownloadVar, bg=COLOR_MANIP_ENTRY, highlightthickness=0)
@@ -467,8 +462,10 @@ class App(Frame):
                     tagDeleteFrame.pack(side=BOTTOM)
                     tagDeleteButton = Button(tagDeleteFrame, text="X",bg=COLOR_DELETE)
                     tagDeleteButton.pack(side=LEFT)
-                    tagsTitle = Label(tagDeleteFrame, text=tagKey+" : "+self.downloadable.tags[tagKey], bg=COLOR_MANIP_FRAME)
+                    tagsTitle = Label(tagDeleteFrame, text=tagKey+" : ", font=("Helvetica", 10, "bold"), bg=COLOR_MANIP_FRAME)
                     tagsTitle.pack(side=LEFT)
+                    tagsValue = Label(tagDeleteFrame, text=self.downloadable.tags[tagKey], bg=COLOR_MANIP_FRAME)
+                    tagsValue.pack(side=LEFT)
                     self.downloadable.tagIds[tagKey] = tagDeleteFrame
                     self.downloadable.tagIds[tagKey+"Label"] = tagsTitle
                     tagDeleteButton.bind("<Button-1>", lambda event, arg=tagKey: self.deleteTag(event, arg))
@@ -490,7 +487,6 @@ class App(Frame):
 
             videoManipulationLabel = Label(videoManipulationFrame, text="MP4 Resolution:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
             videoManipulationLabel.grid(row=0, column=1, pady=2)
-
             
             self.resolutionVar.set(self.downloadable.stream.resolution)
 
@@ -501,7 +497,7 @@ class App(Frame):
 
             self.resolutionVar.trace_id = self.resolutionVar.trace("w", lambda *args:self.downloadable.setStreamByResolution(self.resolutionVar))
 
-            resolutionSelect = OptionMenu(videoManipulationFrame, self.resolutionVar, *self.downloadable.resolutionOptions)
+            resolutionSelect = OptionMenu(videoManipulationFrame, self.resolutionVar, *list(self.downloadable.resolutionToStream.keys()))
             resolutionSelect.grid(row=1, column=1, columnspan=5,padx=3, pady=5)
             resolutionSelect.config(bg=COLOR_MANIP_ENTRY)
 
@@ -527,7 +523,8 @@ class App(Frame):
 
         if self.downloadable.imgUrl == None:
             self.downloadable.imgUrl = requestsGet(self.downloadable.youtubeObject.thumbnail_url)
-        img = Image.open(BytesIO(self.downloadable.imgUrl.content))
+            
+        img = Image.open(BytesIO(requestsGet(self.downloadable.imgUrl).content))
         img = img.resize((160,90))
         render = ImageTk.PhotoImage(img)
         imageLabel = Label(self.downloadableFrame, image=render, width=160, height=90, bg=COLOR_LOWER_FRAME)
@@ -577,12 +574,12 @@ class App(Frame):
 
         formattedMetadata = ""
 
-        for index, md in enumerate(self.downloadable.allMetadata):
+        for k,v in self.downloadable.youtubeObject.items():
+            if k in ["requested_formats", "formats", "thumbnails"]:
+                continue
+            formattedMetadata += "<------------------------------------------------------------>\n" 
 
-            formattedMetadata += "<------------------------------" + str(index+1) + "------------------------------>\n" 
-            for mdKey, mdValue in md.items():
-
-                formattedMetadata += mdKey + ":\n " + mdValue + "\n\n"
+            formattedMetadata += k + ":\n " + str(v) + "\n\n"
 
         text_area.insert(INSERT,formattedMetadata)
         text_area.pack()
@@ -632,7 +629,7 @@ class App(Frame):
             self.addCutAsNewSongVar.set("Enter a Name")
             return
 
-        newDownloadable = Downloadable(self.downloadable.url, self.downloadable.onlyAudio, youtubeObject=self.downloadable.youtubeObject)
+        newDownloadable = Downloadable(self.downloadable.youtubeObject, self.downloadable.onlyAudio)
         newDownloadable.name = newName
         newDownloadable.displayName = newDisplayName
         newDownloadable.changeCut(self.downloadable.lowCut, self.downloadable.highCut)
@@ -788,70 +785,6 @@ class App(Frame):
         if self.clearTagEntryNextClick:
             self.clearTagEntryNextClick = False
             self.tagChangeVar.set('')
-
-
-
-
-    # Fetch entire playlist from single URL
-    def addPlaylist(self, playlistUrls):
-        onlyAudio = self.onlyAudioVar.get()
-
-        # Some URLs may fail to load
-        totalCount = str(len(playlistUrls))
-        successCount = 0
-        failCount=0
-        skippedCount=0
-        failUrls = []
-        skippedStatus = ""
-
-        # If user specified a playlist range, check if it is valid, and if so, shorten [playlistUrls] accordingly
-        if self.playlistRangeVar.get():
-            try:
-                if (int(self.playlistLowerRangeVar.get()) < 1) or (int(self.playlistUpperRangeVar.get())>len(playlistUrls)):
-                    raise IndexError
-
-                playlistUrls = playlistUrls[int(self.playlistLowerRangeVar.get())-1:int(self.playlistUpperRangeVar.get())]
-            except IndexError:
-                self.updateStatus("Playlist out of range (In playlist: " + str( len(playlistUrls) ) + ")", "red")
-                return
-            except (TypeError, ValueError):
-                self.updateStatus("Invalid range (In playlist: " + str( len(playlistUrls) ) + ")", "red")
-                return
-
-        for url in playlistUrls:
-
-            # Check if single URL of playlist is already in list
-            downloadable = self.fetchFromSingleUrl(url)
-            if downloadable == False:
-                failCount+=1
-                failUrls.append(url)
-
-            else:
-                wasAdded = self.addSingleUrl(downloadable)
-                if wasAdded:
-                    successCount+=1
-                else:
-                    skippedCount+=1
-            if skippedCount > 0:
-                skippedStatus = "\nSkipped: " + str(skippedCount)
-            else:
-                skippedStatus = ""
-
-            self.updateStatus("Succeeded: "+str(successCount) + "/" + totalCount + "\nFailed: "+str(failCount)+"/"+totalCount + skippedStatus, "blue")
-
-        # When all URLs in playlist have been processed, 
-        self.clearSearchEntryNextClick = True
-        self.updateStatus('Done!\nSucceeded: '+str(successCount)+" : Failed: "+str(failCount) + skippedStatus, "green")
-
-        if failCount > 0:
-            self.injectTryAgainButton(failUrls)
-
-    def injectTryAgainButton(self, failUrls):
-        if self.tryAgainButton != None:
-            self.tryAgainButton.destroy()
-
-        self.tryAgainButton = Button(self.statusFrame, text="Try "+str(len(failUrls))+" Again", bg=COLOR_MANIP_BUTTON, command=lambda:self.addPlaylist(failUrls))
-        self.tryAgainButton.grid(column=3, row=2)
         
 
     def handleFetchEvent(self, event):
@@ -859,80 +792,37 @@ class App(Frame):
 
 
     def fetch(self):
+
         userInput = self.searchVar.get()
+        onlyAudio = self.onlyAudioVar.get()
 
         if userInput=="" or userInput=="Enter a YouTube URL or Search Query":
             self.updateStatus("Enter a URL or Search Query", "red")
             return False
-        
-        if self.fetchFromYoutube(userInput) == False:
+
+        if self.fetchLock:
+            print("Can't fetch because currently fetching")
+            return
+        self.setLocked(True)
+
+        self.updateStatus("Fetching...", "blue")
+        threading.Thread(target = self.fetchThreaded, args=(userInput, onlyAudio)).start()
+
+
+    def fetchThreaded(self, userInput, onlyAudio):
+        youtubeObjects = self.getYoutubeObjects(userInput)
+        if len(youtubeObjects) < 1:
             self.updateStatus("Failed to Add\n" + makeEllipsis(userInput,25), "red")
+        else: 
+            for ytObj in youtubeObjects:
+                newDownloadable = Downloadable(ytObj, onlyAudio)
+                self.addSingleUrl(newDownloadable)
 
-
-    def fetchFromYoutube(self, userInput):
-
-        onlyAudio = self.onlyAudioVar.get()
-
-        self.updateStatus('Fetching from YouTube...', "blue")
-
-        downloadable = self.fetchFromSingleUrl(userInput)
-        if downloadable != False:
-            self.addSingleUrl(downloadable)
-            return True
-
-        downloadable = self.fetchFromQuery(userInput)
-        if downloadable != False:
-            self.addSingleUrl(downloadable)
-            return True
-        
-        playlistUrls = self.fetchFromPlaylistUrl(userInput)
-        if playlistUrls != False:
-            self.addPlaylist(playlistUrls)
-            return True
-        
-        return False
-
-
-    def fetchFromSingleUrl(self, url):
-        onlyAudio = self.onlyAudioVar.get()
-
-        for i in range(self.triesVar.get()):
-            try:
-                downloadable = Downloadable(url, onlyAudio)
-                return downloadable
-            # Only retry when certain errors are thrown
-            except HTTPError as e:
-                print("Retry #",(i+1))
-                continue
-            except Exception as e:
-                print("Stopping fetch: ",e)
-                traceback.print_exc()
-                return False
-        return False
-
-    def fetchFromPlaylistUrl(self, url):
-        try:
-            playlistUrls = pytube.Playlist(url).video_urls
-            return playlistUrls
-        except KeyError:
-            return False
-
-    def fetchFromQuery(self, query):
-        onlyAudio = self.onlyAudioVar.get()
-        try:
-            videosSearch = VideosSearch(query, limit = 1)
-            searchResultUrl = videosSearch.result()['result'][0]['link']
-            urlFromQuery = True
-            downloadable = self.fetchFromSingleUrl(searchResultUrl)
-            return downloadable
-        except:
-            return False
+        self.setLocked(False)
 
 
     def addSingleUrl(self, downloadable):
         onlyAudio = self.onlyAudioVar.get()
-
-        # If URL is already in list, flash the URL entry and notify the user
 
         urlRepeats = self.checkInDownloadables(downloadable)
 
@@ -952,21 +842,12 @@ class App(Frame):
 
         self.downloadables[downloadable.displayName] = downloadable
 
-        # Count how many videos and songs are being downloaded and show in status frame
 
         if onlyAudio:
             self.audioCountVar.set('Audio: '+str(int(self.audioCountVar.get().split()[1])+1))
         else:
             self.videoCountVar.set('Video: '+str(int(self.videoCountVar.get().split()[1])+1))
 
-        if self.addMdTagsVar.get():
-            downloadable.generateTagListFromMetadata()
-        
-        if self.addTitleTagsVar.get():
-            downloadable.generateTagListFromTitle()
-        
-
-        # Create text that represents URL in URL list
         self.mylist.insert(END, downloadable.displayName) 
 
         self.setDefaultListSelection()
@@ -1001,7 +882,15 @@ class App(Frame):
 
 
     # Handles downloading of all contents in URL list
+
     def download(self):
+        if self.downloadLock:
+            print("Downloading locked because currently downloading")
+            return
+        self.setLocked(True)
+        threading.Thread(target=self.downloadThreaded).start()
+
+    def downloadThreaded(self):
 
         numDownloadables = len(self.downloadables)
         # Check if user entered any URLS
@@ -1034,13 +923,88 @@ class App(Frame):
             self.deleteAll()
 
         # Notify user that download is complete
+        self.setLocked(False)
         self.updateStatus("Success! Downloaded into:\n" + (directory if len(directory) <25 else directory[:12] + "..." + directory[len(directory)-12:]), "green")
+
+    def setLocked(self, locked):
+        self.downloadLock = locked
+        self.fetchLock = locked
+        if locked:
+            self.startDownloadButton.config(bg=COLOR_DISABLED)
+            self.fetchButton.config(bg=COLOR_DISABLED)
+
+            self.startDownloadButton["state"] = "disabled"
+            self.fetchButton["state"] = "disabled"
+
+        else:
+            self.startDownloadButton.config(bg=COLOR_DOWNLOAD)
+            self.fetchButton.config(bg=COLOR_FETCH)
+            
+            self.startDownloadButton["state"] = "normal"
+            self.fetchButton["state"] = "normal"
+
+
 
     def pollForPreview(self):
 
         if Downloadable.previewThread == None or Downloadable.previewThread.is_alive() == False:
             self.previewLabelVar.set("Playing:\n")
         self.after(2000, self.pollForPreview)
+
+    def getYoutubeObjects(self, url):
+        youtubeObjects = []
+
+        with youtube_dl.YoutubeDL({'quiet':True, "noplaylist":True, "age_limit":3,
+                                    "logger": self.MyLogger(self)})as ydl:
+            try:
+                result = ydl.extract_info \
+                (url,
+                download=False) #We just want to extract the info
+                if 'entries' in result:
+                    # Can be a playlist or a list of videos
+                    video = result['entries']
+
+                    #loops entries to grab each video_url
+                    for i, item in enumerate(video):
+                        video = result['entries'][i]
+                        youtubeObjects.append(video)
+
+                else:
+                    youtubeObjects.append(result)
+
+            except Exception as e1:
+                print("E1: ",e1)
+                try:
+                    videosSearch = VideosSearch(url, limit = 1)
+                    searchResultUrl = videosSearch.result()['result'][0]['link']
+                    result = ydl.extract_info \
+                        (searchResultUrl,
+                        download=False) 
+                    youtubeObjects.append(result)
+                except Exception as e2:
+                    print("Failed to fetch: ",e2)
+                    pass
+
+        return youtubeObjects
+
+    class MyLogger(object):
+
+        def __init__(self, outer):
+            self.outer = outer
+        def debug(self, msg):
+            x = re.search("Downloading video [0-9]+ of [0-9]+", msg)
+            if x != None:
+                nums = re.findall("[0-9]+", msg)
+
+                self.outer.updateStatus("Fetching "+str(nums[0])+"/"+str(nums[1]), "blue")
+                
+
+        def warning(self, msg):
+            print("WARNING: ",msg)
+
+        def error(self, msg):
+            print("ERROR: ",msg)
+
 
 # Application entry-point
 # Configure Tk object and start Tkinter loop
