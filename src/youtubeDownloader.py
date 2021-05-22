@@ -16,7 +16,7 @@ import youtube_dl
 import threading
 import re
 
-from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis, breakLines
+from helpers import formatSeconds, addLineBreaks, HMStoSeconds, makeEllipsis, breakLines, sanitizeFilename
 
 
 BG="#ffffff"
@@ -910,7 +910,7 @@ class App(Frame):
         threadList = []
 
         for index, downloadable in enumerate(self.downloadables.values()):           
-            thread = Thread(target=downloadable.download, args=(directory,))
+            thread = threading.Thread(target=downloadable.download, args=(directory,))
             threadList.append(thread)
             thread.start()                                                         
         

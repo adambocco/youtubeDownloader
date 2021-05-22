@@ -34,3 +34,11 @@ def breakLines(string, max):
             lineBrokenString += "\n"
         lineBrokenString += char
     return lineBrokenString
+
+def sanitizeFilename(s):
+    if not s:
+        return ''
+    badchars = '\\/:*?\"<>|'
+    for c in badchars:
+        s = s.replace(c, '')
+    return s; 

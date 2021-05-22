@@ -1,5 +1,6 @@
 # Author: Adam Bocco - github.com/adambocco
-# YouTube Downloader 
+# YouTube Downloader
+
 
 # Make executable with: pyinstaller -F --add-data "./ffmpeg/*;./ffmpeg/" youtubeDownloader.py
 
@@ -17,7 +18,6 @@ from io import BytesIO
 from requests import get as requestsGet
 from tkSliderWidget import Slider
 from urllib.error import HTTPError
-from sanitize_filename import sanitize
 import pygame
 
 from Stream import Stream
@@ -30,7 +30,7 @@ FFMPEG_PATH = "./ffmpeg/ffmpeg.exe"
 FFPLAY_PATH = "./ffmpeg/ffplay.exe"
 NUM_THREADS = 4
 
-from helpers import formatSeconds, makeEllipsis
+from helpers import formatSeconds, makeEllipsis, sanitizeFilename
 
 class Downloadable:
     metadataToTag = {'Artist':'Contributing Artists','Artists':'Contributing Artists', 'Title':'Title', 'Album' : 'Album', 'Song':'Title'}   
@@ -205,7 +205,7 @@ class Downloadable:
         bitrate = str(int(self.stream.bitrate/1000)) + "k"
         url = self.stream.url
         extension = ".mp3" if self.onlyAudio else ".mp4"
-        finalPath = os.path.join(directory, sanitize(self.name) + extension)
+        finalPath = os.path.join(directory, sanitizeFilename(self.name) + extension)
 
         clip = AudioFileClip(url) if self.onlyAudio else VideoFileClip(url)
 
