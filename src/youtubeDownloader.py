@@ -38,10 +38,10 @@ COLOR_DOWNLOAD = "#90be6d"
 COLOR_FETCH = "#f9c74f"
 
 FONT_XS = ("Helvetica", 8)
-FONT_SM = ("Helvetica", 10)
-FONT_MD = ("Helvetica", 12)
-FONT_LG =  ("Helvetica", 16)
-FONT_XL = ("Helvetica", 18)
+FONT_SM = ("Helvetica", 9)
+FONT_MD = ("Helvetica", 10)
+FONT_LG =  ("Helvetica", 12)
+FONT_XL = ("Helvetica", 14)
 ID3_TAG_OPTIONS = ['Title', 'Contributing Artists', 'Album', 'Album Artist', 'Year', 'Track Number']    
 
 
@@ -57,12 +57,12 @@ class App(Frame):
 
         sec = Frame(self, bg=BG)
 
-        sec.pack(fill=X,side=BOTTOM)
+        sec.pack(fill=X,side=BOTTOM, padx=10, pady=10)
 
 
         self.my_canvas = Canvas(self, bg=BG)
 
-        self.my_canvas.pack(side=LEFT,fill=BOTH,expand=1, padx=20, pady=20)
+        self.my_canvas.pack(side=LEFT,fill=BOTH,expand=1, padx=10, pady=10)
 
         self.x_scrollbar = Scrollbar(sec,orient=HORIZONTAL,command=self.my_canvas.xview)
         self.x_scrollbar.pack(side=BOTTOM,fill=X)
@@ -215,11 +215,11 @@ class App(Frame):
     def createWidgets(self): 
 
         # Top frame widgets for adding Downloadables, downloading and other options
-        self.controlFrame = Frame(self.a, padx=10, pady=10, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
-        self.controlFrame.pack(expand=True, padx=5, pady=5)
+        self.controlFrame = Frame(self.a, padx=3, pady=3, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
+        self.controlFrame.pack(expand=True, padx=3, pady=3)
 
         self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=60, bg=COLOR_OPTIONS_ENTRY)
-        self.searchEntry.grid(row=1, column=0, columnspan=10, padx=5, pady=5)
+        self.searchEntry.grid(row=1, column=0, columnspan=10, padx=3, pady=3)
         self.searchEntry.bind("<Button-1>",self.clearSearchEntry)
         self.searchEntry.bind("<Return>", self.handleFetchEvent)   
 
@@ -227,11 +227,11 @@ class App(Frame):
         self.fetchOnlyAudioCheckbox.grid(row=1, rowspan=2, column=10)     
 
         self.fetchButton = Button(self.controlFrame, text="Add", command= lambda : self.fetch(), bg=COLOR_FETCH,width=10, font=FONT_MD)
-        self.fetchButton.grid(row=1, column=11, padx=5, pady=5)
+        self.fetchButton.grid(row=1, column=11, padx=3, pady=3)
 
         # Top right frame for controlling playlist range to be retrieved
-        self.optionsFrame = Frame(self.controlFrame, padx=5, pady=5, bg=COLOR_OPTIONS_FRAME, borderwidth=2, relief="groove")
-        self.optionsFrame.grid(padx=5, pady=5, row=3, rowspan=10, column=0, columnspan=12)
+        self.optionsFrame = Frame(self.controlFrame, padx=3, pady=3, bg=COLOR_OPTIONS_FRAME, borderwidth=2, relief="groove")
+        self.optionsFrame.grid(padx=3, pady=3, row=3, rowspan=10, column=0, columnspan=12)
 
         self.playlistRangeFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
         self.playlistRangeFrame.grid(column=1, row=0)
@@ -240,32 +240,32 @@ class App(Frame):
         self.playlistRangeCheckbox.grid(column=0, columnspan=6, row=1)
 
         self.playlistLowerRange = Entry(self.playlistRangeFrame, textvariable=self.playlistLowerRangeVar, width=4, bg=COLOR_OPTIONS_ENTRY)
-        self.playlistLowerRange.grid(row=2, column=0, columnspan=2, padx=5, pady=5)
+        self.playlistLowerRange.grid(row=2, column=0, columnspan=2, padx=3, pady=3)
 
         self.playlistRangeDashLabel = Label(self.playlistRangeFrame, text="-", bg=COLOR_OPTIONS_OPTION)
         self.playlistRangeDashLabel.grid(row=2, column=2, columnspan = 2)
 
         self.playlistUpperRange = Entry(self.playlistRangeFrame, textvariable=self.playlistUpperRangeVar, width=4, bg=COLOR_OPTIONS_ENTRY)
-        self.playlistUpperRange.grid(row=2, column=4, columnspan=2, padx=5, pady=5)
+        self.playlistUpperRange.grid(row=2, column=4, columnspan=2, padx=3, pady=3)
 
         self.allowRepeatsCheckbox = Checkbutton(self.optionsFrame, text="Allow Repeats", variable=self.allowRepeatsVar,bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
-        self.allowRepeatsCheckbox.grid(column=2, row=0, padx=10, pady=10)
+        self.allowRepeatsCheckbox.grid(column=2, row=0, padx=5, pady=5)
 
         self.keepTryingFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
-        self.keepTryingFrame.grid(row=0, column=3, padx=5, pady=5)
+        self.keepTryingFrame.grid(row=0, column=3, padx=3, pady=3)
 
         self.keepTryingLabel =Label(self.keepTryingFrame, text="Attempts to Fetch\nFrom YouTube\nBefore Skipping", bg=COLOR_OPTIONS_OPTION)
         self.keepTryingLabel.pack(side=LEFT)
 
         self.keepTryingEntry = Entry(self.keepTryingFrame, textvariable = self.triesVar, width=5, validate="key", validatecommand=self.vcmdInt, bg=COLOR_OPTIONS_ENTRY)
-        self.keepTryingEntry.pack(side=LEFT, padx=5, pady=5)
+        self.keepTryingEntry.pack(side=LEFT, padx=3, pady=3)
         self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
 
         self.middleFrame = Frame(self.a, bg=BG)
         self.middleFrame.pack(expand=True)
 
         # Frame below URL input, displays status of URL retrieval success, errors, and download progress
-        self.statusFrame = Frame(self.middleFrame, padx=5, pady=5,bg=COLOR_MANIP_ENTRY, borderwidth=2, relief="groove", width=80)
+        self.statusFrame = Frame(self.middleFrame, padx=3, pady=3,bg=COLOR_MANIP_ENTRY, borderwidth=2, relief="groove", width=80)
         self.statusFrame.pack(side=LEFT)
 
         self.audioCountLabel = Label(self.statusFrame, textvariable = self.audioCountVar, padx=10,font=FONT_MD, bg=COLOR_MANIP_ENTRY)
@@ -285,10 +285,10 @@ class App(Frame):
 
         # Middle frame/scrollbox for holding URLs retrieved and ready to be customized or downloaded
 
-        self.downloadablesListFrame = Frame(self.middleFrame, padx=5, pady=10, bg="#ffffff")
+        self.downloadablesListFrame = Frame(self.middleFrame, padx=3, pady=5, bg="#ffffff")
         self.downloadablesListFrame.pack(side=LEFT)
 
-        self.scrollFrame = Frame(self.downloadablesListFrame, padx=5, pady=10, bg="#ffffff")
+        self.scrollFrame = Frame(self.downloadablesListFrame, padx=3, pady=5, bg="#ffffff")
         self.scrollFrame.grid(column=1, row=2, columnspan=10)
 
         self.scroll_barY = Scrollbar(self.scrollFrame) 
@@ -304,7 +304,7 @@ class App(Frame):
         self.scroll_barY.config( command = self.mylist.yview ) 
         self.scroll_barX.config( command = self.mylist.xview ) 
 
-        self.previewFrame = Frame(self.a, padx=10, pady=10, bg=COLOR_LOWER_FRAME)
+        self.previewFrame = Frame(self.a, padx=5, pady=5, bg=COLOR_LOWER_FRAME)
         self.previewFrame.pack()
 
         # Start Download Frame
@@ -312,10 +312,10 @@ class App(Frame):
         self.startDownloadFrame.pack(side=LEFT)
 
         self.startDownloadButton = Button(self.startDownloadFrame, text="Start\nDownload", command=self.download, bg=COLOR_DOWNLOAD,width=10, font=FONT_MD)
-        self.startDownloadButton.grid( row=2, rowspan=4, column=10, columnspan=2, padx=5, pady=5)
+        self.startDownloadButton.grid( row=2, rowspan=4, column=10, columnspan=2, padx=3, pady=3)
 
         self.deleteOnDownloadCheckbutton = Checkbutton(self.startDownloadFrame, text="Clear List\nAfter Downloading", variable=self.deleteOnDownloadVar, bg=COLOR_MANIP_ENTRY, highlightthickness=0)
-        self.deleteOnDownloadCheckbutton.grid(row=6, rowspan=2, column=10, columnspan=2, padx=5, pady=5)
+        self.deleteOnDownloadCheckbutton.grid(row=6, rowspan=2, column=10, columnspan=2, padx=3, pady=3)
 
 
     def validateInt(self, action, index, value_if_allowed,
@@ -363,7 +363,7 @@ class App(Frame):
         self.tagChangeVar.set('')
 
 
-        self.downloadableFrame = Frame(self.previewFrame, padx=5, pady=5, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")                             
+        self.downloadableFrame = Frame(self.previewFrame, padx=3, pady=3, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")                             
         self.downloadableFrame.pack(expand=True)
 
         self.downloadableNameLabel = Label(self.downloadableFrame, text=makeEllipsis(self.downloadable.name, 50), bg=COLOR_LOWER_FRAME, font=FONT_XL)                                                      
@@ -380,7 +380,7 @@ class App(Frame):
         downloadableNameChangeEntry.grid(row=1, column=1, columnspan=2)
 
         downloadableChangeNameButton = Button(self.downloadableFrame,text="Change Name", command=self.changeName, bg=COLOR_MANIP_BUTTON, height=2)
-        downloadableChangeNameButton.grid(row=1, column=3, columnspan=1, padx=5)
+        downloadableChangeNameButton.grid(row=1, column=3, columnspan=1, padx=3)
 
         mediaManipulationFrame = Frame(self.downloadableFrame, bg=COLOR_LOWER_FRAME)
         mediaManipulationFrame.grid(row=4,column=0,columnspan=20)
@@ -388,8 +388,8 @@ class App(Frame):
         cutFrame = Frame(self.downloadableFrame, bg=COLOR_LOWER_FRAME, borderwidth=2, relief="groove")
         cutFrame.grid(row=3, column=1)
 
-        optionsFrame = Frame(mediaManipulationFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
-        optionsFrame.grid(row=0, column=0, padx=10, pady=10)
+        optionsFrame = Frame(mediaManipulationFrame, padx=3, pady=3, bg=COLOR_MANIP_FRAME, borderwidth=2, relief="groove")
+        optionsFrame.grid(row=0, column=0, padx=5, pady=5)
 
         cutLabel = Label(optionsFrame, text="Cut Media:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
         cutLabel.grid(row=0, column=1, columnspan=5, pady=3)
@@ -459,7 +459,7 @@ class App(Frame):
             formattedCutInfo = "Length: " + self.downloadable.getLengthString()
 
         self.cutInfo = Label(optionsFrame, text=formattedCutInfo, bg=COLOR_MANIP_FRAME)
-        self.cutInfo.grid(row=4, column=6, columnspan=10, pady=5, padx=5)
+        self.cutInfo.grid(row=4, column=6, columnspan=10, pady=3, padx=3)
 
         addCutAsNewSongEntry = Entry(optionsFrame, textvariable=self.addCutAsNewSongVar, bg=COLOR_MANIP_ENTRY)
         addCutAsNewSongEntry.grid(row=4, column=1, columnspan=6)
@@ -480,14 +480,14 @@ class App(Frame):
         if self.downloadable.onlyAudio:
 
             metadataTagsFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
-            metadataTagsFrame.grid(row=0, column=1, padx=10, pady=2)
+            metadataTagsFrame.grid(row=0, column=1, padx=5, pady=2)
 
             metadataLabel = Label(metadataTagsFrame, text="Format ID3 Tags:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
             metadataLabel.grid(row=0, column=1, pady=2)
 
 
-            self.tagsFrame = Frame(metadataTagsFrame, padx=5, pady=5, bg=COLOR_MANIP_FRAME)
-            self.tagsFrame.grid(row=3, column=1, columnspan=10, padx=5, pady=5)
+            self.tagsFrame = Frame(metadataTagsFrame, padx=3, pady=3, bg=COLOR_MANIP_FRAME)
+            self.tagsFrame.grid(row=3, column=1, columnspan=10, padx=3, pady=3)
 
             tagsTitle = Label(self.tagsFrame, text="Tags: ", font=("Helvetica",14), bg=COLOR_MANIP_FRAME)
             tagsTitle.pack(side=LEFT)
@@ -511,15 +511,15 @@ class App(Frame):
             tagSelect.config(width=40, bg=COLOR_MANIP_ENTRY)
 
             tagEntry = Entry(metadataTagsFrame, textvariable = self.tagChangeVar, width=40, bg=COLOR_MANIP_ENTRY)
-            tagEntry.grid(row=2, column=1, columnspan=3, padx=10, pady=5)
+            tagEntry.grid(row=2, column=1, columnspan=3, padx=5, pady=3)
             tagEntry.bind('<Button-1>', self.clearTagEntry)
 
             addTag = Button(metadataTagsFrame, text="Add Tag",command=self.addTag, bg=COLOR_MANIP_ENTRY)
-            addTag.grid(row=2, column=4, columnspan=1, padx=5, pady=5)
+            addTag.grid(row=2, column=4, columnspan=1, padx=3, pady=3)
 
         else:
             videoManipulationFrame = Frame(mediaManipulationFrame, borderwidth=2, relief="groove", bg=COLOR_MANIP_FRAME)
-            videoManipulationFrame.grid(row=0, column=1, padx=10, pady=2)
+            videoManipulationFrame.grid(row=0, column=1, padx=5, pady=2)
 
             videoManipulationLabel = Label(videoManipulationFrame, text="MP4 Resolution:", font=("Helvetica",16), bg=COLOR_MANIP_FRAME)
             videoManipulationLabel.grid(row=0, column=1, pady=2)
@@ -534,7 +534,7 @@ class App(Frame):
             self.resolutionVar.trace_id = self.resolutionVar.trace("w", lambda *args:self.downloadable.setStreamByResolution(self.resolutionVar))
 
             resolutionSelect = OptionMenu(videoManipulationFrame, self.resolutionVar, *list(self.downloadable.resolutionToStream.keys()))
-            resolutionSelect.grid(row=1, column=1, columnspan=5,padx=3, pady=5)
+            resolutionSelect.grid(row=1, column=1, columnspan=5,padx=3, pady=3)
             resolutionSelect.config(bg=COLOR_MANIP_ENTRY)
 
 
@@ -568,19 +568,19 @@ class App(Frame):
         imageLabel.image = render
 
         previewControlFrame= Frame(mediaManipulationFrame, bg=COLOR_LOWER_FRAME, borderwidth=1, relief="groove")
-        previewControlFrame.grid(row=2, column=0, padx=5, pady=5)
+        previewControlFrame.grid(row=2, column=0, padx=3, pady=3)
 
         videoPreviewButton = Button(previewControlFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=lambda: self.previewClip("ffmpeg"), bg=COLOR_MANIP_BUTTON)
-        videoPreviewButton.grid(row=0, column=0, padx=5, pady=5)
+        videoPreviewButton.grid(row=0, column=0, padx=3, pady=3)
 
         self.previewLabel = Label(previewControlFrame, textvariable=self.previewLabelVar, bg=COLOR_LOWER_FRAME)
         self.previewLabel.grid(row=0, column=1, padx=3, pady=3)
 
         stopPreviewButton = Button(previewControlFrame, text="Stop Preview", command=self.stopPreview, bg=COLOR_MANIP_BUTTON)
-        stopPreviewButton.grid(row=0, column=2, padx=5, pady=5)
+        stopPreviewButton.grid(row=0, column=2, padx=3, pady=3)
 
         showMetadataButton = Button(mediaManipulationFrame, text="Show Metadata", command=self.showMetadata, bg=COLOR_MANIP_BUTTON)
-        showMetadataButton.grid(row=2, column=1, columnspan=2, padx=5, pady=5)
+        showMetadataButton.grid(row=2, column=1, columnspan=2, padx=3, pady=3)
 
         # Assign references to the widgets in preview frame to url dict entry                          
         self.previewDownloadableFrame = self.downloadableFrame
