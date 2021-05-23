@@ -24,9 +24,6 @@ import pygame
 from Stream import Stream
 
 
-
-import ffmpeg
-
 FFMPEG_PATH = "./ffmpeg/ffmpeg.exe"
 FFPLAY_PATH = "./ffmpeg/ffplay.exe"
 NUM_THREADS = 4
