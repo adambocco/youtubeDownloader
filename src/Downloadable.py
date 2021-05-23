@@ -3,8 +3,9 @@
 
 
 # Make executable with: pyinstaller -F --add-data "./ffmpeg/*;./ffmpeg/" youtubeDownloader.py
-
+import signal
 import multiprocessing
+import subprocess
 import os
 import sys
 from moviepy.editor import AudioFileClip, VideoFileClip
@@ -262,7 +263,7 @@ class Downloadable:
         return finalPath
 
 
-    def previewClip(self, labelVar):
+    def previewClip(self, labelVar, ffmpegOrMoviepy):
         Downloadable.previewLabelVar = labelVar
         stopPreview()
 
@@ -283,12 +284,19 @@ class Downloadable:
             if high > self.length:
                 high = self.length
 
-
         Downloadable.previewDownloadable = self
         url = self.stream.url if self.onlyAudio else self.previewStream.url
-        Downloadable.previewThread = multiprocessing.Process(target=startPreview, args=(self.onlyAudio, url, self.cut, low, high, newVolume))
-        Downloadable.previewThread.start()
-        
+        if ffmpegOrMoviepy == "ffmpeg":
+            cmd = "ffplay "
+            if self.cut:
+                cmd += "-ss " + str(low)
+                cmd += " -t " + str(high) + " "
+            cmd += "-loglevel error "
+            cmd += self.stream.url
+            Downloadable.previewThread = subprocess.Popen(cmd)
+        elif ffmpegOrMoviepy == "moviepy":
+            Downloadable.previewThread = multiprocessing.Process(target=startPreview, args=(self.onlyAudio, url, self.cut, low, high, newVolume))
+            Downloadable.previewThread.start()
 
     def applyID3Tags(self, path):
         eyed3File = eyed3.load(path)
@@ -327,7 +335,7 @@ def startPreview(onlyAudio, url, cut, low, high, volume):
 
     if cut:
         clip = clip.subclip(low,high)
-
+    print("PREVIEWING WITH MOVIEPY")
     clip.preview()
     clip.close()
 
@@ -338,11 +346,17 @@ def startPreview(onlyAudio, url, cut, low, high, volume):
 def stopPreview():
     Downloadable.previewLabelVar.set("Playing:\n")
     if Downloadable.previewThread != None:
-        try:
-            Downloadable.previewThread.terminate()
-            Downloadable.previewThread.join()
-        except:
-            pass
+        print("Preview thread trying to stop: ", Downloadable.previewThread)
+    # try:
+        Downloadable.previewThread.terminate()
+        Downloadable.previewThread.kill()
+        # os.kill(Downloadable.previewThread.pid, signal.SIGTERM)
+        os.kill(Downloadable.previewThread.pid, 0)
+        os.system("taskkill  /F /pid "+str(Downloadable.previewThread.pid))
+
+        # except Exception as e:
+        #     print("Error killing preview: ", e)
+        #     pass
 
     Downloadable.previewThread = None
     Downloadable.previewClipVar = None

@@ -1,6 +1,7 @@
 import os
 import sys
 import string
+
 from tkinter import *
 from tkinter import filedialog as fd
 from tkinter import scrolledtext
@@ -49,8 +50,38 @@ class App(Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        self.pack()
+        self.pack(fill=BOTH, expand=1)
         self.config(bg=BG)
+
+        # Create Frame for X Scrollbar
+
+        sec = Frame(self, bg=BG)
+
+        sec.pack(fill=X,side=BOTTOM)
+
+
+        self.my_canvas = Canvas(self, bg=BG)
+
+        self.my_canvas.pack(side=LEFT,fill=BOTH,expand=1, padx=20, pady=20)
+
+        self.x_scrollbar = Scrollbar(sec,orient=HORIZONTAL,command=self.my_canvas.xview)
+        self.x_scrollbar.pack(side=BOTTOM,fill=X)
+
+        self.y_scrollbar = Scrollbar(self,orient=VERTICAL,command=self.my_canvas.yview)
+        self.y_scrollbar.pack(side=RIGHT,fill=Y)
+
+        self.my_canvas.configure(xscrollcommand=self.x_scrollbar.set)
+
+        self.my_canvas.configure(yscrollcommand=self.y_scrollbar.set)
+
+        self.my_canvas.bind("<Configure>",lambda e: self.my_canvas.config(scrollregion= self.my_canvas.bbox(ALL))) 
+
+        self.a = Frame(self.my_canvas, bg=BG)
+
+        self.my_canvas.create_window((0,0),window=self.a, anchor="nw")
+
+        self.my_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+
 
         self.vcmdInt = (master.register(self.validateInt),
                 '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W')
@@ -184,7 +215,7 @@ class App(Frame):
     def createWidgets(self): 
 
         # Top frame widgets for adding Downloadables, downloading and other options
-        self.controlFrame = Frame(self, padx=10, pady=10, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
+        self.controlFrame = Frame(self.a, padx=10, pady=10, bg=COLOR_TOP_FRAME, borderwidth=2, relief="groove", width=80)
         self.controlFrame.pack(expand=True, padx=5, pady=5)
 
         self.searchEntry = Entry(self.controlFrame, textvariable = self.searchVar,font=FONT_MD, width=60, bg=COLOR_OPTIONS_ENTRY)
@@ -230,7 +261,7 @@ class App(Frame):
         self.keepTryingEntry.pack(side=LEFT, padx=5, pady=5)
         self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
 
-        self.middleFrame = Frame(self, bg=BG)
+        self.middleFrame = Frame(self.a, bg=BG)
         self.middleFrame.pack(expand=True)
 
         # Frame below URL input, displays status of URL retrieval success, errors, and download progress
@@ -273,7 +304,7 @@ class App(Frame):
         self.scroll_barY.config( command = self.mylist.yview ) 
         self.scroll_barX.config( command = self.mylist.xview ) 
 
-        self.previewFrame = Frame(self, padx=10, pady=10, bg=COLOR_LOWER_FRAME)
+        self.previewFrame = Frame(self.a, padx=10, pady=10, bg=COLOR_LOWER_FRAME)
         self.previewFrame.pack()
 
         # Start Download Frame
@@ -312,8 +343,7 @@ class App(Frame):
     # Shows all data retrieved from youtube and options to customize before downloading
     # Loads into preview frame (bottom frame)
     # Binds to 'self.mylist'
-    def showDownloadable(self, ev):                                                             
-
+    def showDownloadable(self, ev):     
          # Destroy currently in preview frame to show currently selecte done
         if self.previewDownloadableFrame != None:                                               
             self.previewDownloadableFrame.destroy()
@@ -436,7 +466,13 @@ class App(Frame):
         addCutAsNewSongEntry.bind("<Button-1>", self.clearAddCutAsNewSongEntry)
 
         addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=self.addCutAsNewSong)
-        addCutAsNewSongButton.grid(row=5, column=1, columnspan=6)
+        addCutAsNewSongButton.grid(row=5, column=1, columnspan=4)
+
+        # BUTTON DISABLED:
+        #   In order for the moviepy preview to work, we need to find why pyinstaller messes up the program
+        #   Try removing state and seeing what happens 
+        # previewCutButton = Button(optionsFrame, text="Preview Cut", font=FONT_MD, state="disabled", command=lambda: self.previewClip("moviepy"))
+        # previewCutButton.grid(row=5, column=6, columnspan=2)
 
         # Add metadata tags if downloading audio only
         # TODO: Add support for adding tags to .mp4
@@ -534,7 +570,7 @@ class App(Frame):
         previewControlFrame= Frame(mediaManipulationFrame, bg=COLOR_LOWER_FRAME, borderwidth=1, relief="groove")
         previewControlFrame.grid(row=2, column=0, padx=5, pady=5)
 
-        videoPreviewButton = Button(previewControlFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=self.previewClip, bg=COLOR_MANIP_BUTTON)
+        videoPreviewButton = Button(previewControlFrame, text="Preview "+("Audio" if self.downloadable.onlyAudio else "Video") ,command=lambda: self.previewClip("ffmpeg"), bg=COLOR_MANIP_BUTTON)
         videoPreviewButton.grid(row=0, column=0, padx=5, pady=5)
 
         self.previewLabel = Label(previewControlFrame, textvariable=self.previewLabelVar, bg=COLOR_LOWER_FRAME)
@@ -550,11 +586,24 @@ class App(Frame):
         self.previewDownloadableFrame = self.downloadableFrame
         self.previewDownloadable = self.downloadable.displayName
 
+        self.my_canvas.update()                                                        
+        self.x_scrollbar.update()
+        self.y_scrollbar.update()
+        self.my_canvas.xview()
+        self.my_canvas.yview()
 
-    def previewClip(self):
+        self.my_canvas.update()                                                        
+        self.x_scrollbar.update()
+        self.y_scrollbar.update()
+        self.my_canvas.xview()
+        self.my_canvas.yview()
+
+
+
+    def previewClip(self, ffmpegOrMoviepy):
         self.previewLabelVar.set("Loading...\n")
         self.update()
-        self.downloadable.previewClip(self.previewLabelVar)
+        self.downloadable.previewClip(self.previewLabelVar, ffmpegOrMoviepy)
         Downloadable.previewDownloadable = self.downloadable
         self.previewLabelVar.set("Playing:\n"+makeEllipsis(Downloadable.previewDownloadable.name,20))
 
@@ -946,10 +995,13 @@ class App(Frame):
 
 
     def pollForPreview(self):
-
-        if Downloadable.previewThread == None or Downloadable.previewThread.is_alive() == False:
-            self.previewLabelVar.set("Playing:\n")
-        self.after(2000, self.pollForPreview)
+        try:
+            if Downloadable.previewThread.poll() == None or Downloadable.previewThread.poll() == 0:
+                self.previewLabelVar.set("Playing:\n")
+        except:
+            pass
+        self.after(5000, self.pollForPreview)
+        
 
     def getYoutubeObjects(self, url):
         youtubeObjects = []
@@ -1005,14 +1057,18 @@ class App(Frame):
         def error(self, msg):
             print("ERROR: ",msg)
 
+    def on_mousewheel(self, event):
+        self.my_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
 
 # Application entry-point
 # Configure Tk object and start Tkinter loop
 def main():
     root = Tk()
     root['bg'] = BG
-    root.geometry("1200x1200")
+    root.geometry("1000x864")
     root.title("YouTube Downloader")
+    root.resizable(True, True)
     app = App(master=root)
     app.pollForPreview()
     app.mainloop()
