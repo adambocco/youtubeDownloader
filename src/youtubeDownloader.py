@@ -251,15 +251,15 @@ class App(Frame):
         self.allowRepeatsCheckbox = Checkbutton(self.optionsFrame, text="Allow Repeats", variable=self.allowRepeatsVar,bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
         self.allowRepeatsCheckbox.grid(column=2, row=0, padx=5, pady=5)
 
-        self.keepTryingFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
-        self.keepTryingFrame.grid(row=0, column=3, padx=3, pady=3)
+        # self.keepTryingFrame = Frame(self.optionsFrame, bg=COLOR_OPTIONS_OPTION, borderwidth=1, relief="groove")
+        # self.keepTryingFrame.grid(row=0, column=3, padx=3, pady=3)
 
-        self.keepTryingLabel =Label(self.keepTryingFrame, text="Attempts to Fetch\nFrom YouTube\nBefore Skipping", bg=COLOR_OPTIONS_OPTION)
-        self.keepTryingLabel.pack(side=LEFT)
+        # self.keepTryingLabel =Label(self.keepTryingFrame, text="Attempts to Fetch\nFrom YouTube\nBefore Skipping", bg=COLOR_OPTIONS_OPTION)
+        # self.keepTryingLabel.pack(side=LEFT)
 
-        self.keepTryingEntry = Entry(self.keepTryingFrame, textvariable = self.triesVar, width=5, validate="key", validatecommand=self.vcmdInt, bg=COLOR_OPTIONS_ENTRY)
-        self.keepTryingEntry.pack(side=LEFT, padx=3, pady=3)
-        self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
+        # self.keepTryingEntry = Entry(self.keepTryingFrame, textvariable = self.triesVar, width=5, validate="key", validatecommand=self.vcmdInt, bg=COLOR_OPTIONS_ENTRY)
+        # self.keepTryingEntry.pack(side=LEFT, padx=3, pady=3)
+        # self.keepTryingEntry.bind("<FocusOut>", self.applyTries)
 
         self.middleFrame = Frame(self.a, bg=BG)
         self.middleFrame.pack(expand=True)
@@ -859,7 +859,13 @@ class App(Frame):
 
 
     def fetchThreaded(self, userInput, onlyAudio):
-        youtubeObjects = self.getYoutubeObjects(userInput)
+        try:
+            youtubeObjects = self.getYoutubeObjects(userInput)
+        except IndexError:
+            print("Playlist index out of range!")
+            self.updateStatus("Playlist Index\n Out of Range", "red")
+            self.setLocked(False)
+
         if len(youtubeObjects) < 1:
             self.updateStatus("Failed to Add\n" + makeEllipsis(userInput,25), "red")
         else: 
@@ -996,18 +1002,39 @@ class App(Frame):
 
     def pollForPreview(self):
         try:
-            if Downloadable.previewThread.poll() == None or Downloadable.previewThread.poll() == 0:
+            if Downloadable.previewThread.poll() != None:
                 self.previewLabelVar.set("Playing:\n")
-        except:
-            pass
-        self.after(5000, self.pollForPreview)
+                
+        except Exception as e:
+            self.previewLabelVar.set("Playing:\n")
+
+        self.after(2000, self.pollForPreview)
         
 
     def getYoutubeObjects(self, url):
         youtubeObjects = []
+        
+        youtubeOptions = {
+            # Don't print verbosely to console
+            "quiet": True,
+            # If mix, download single song, if on playlist page, download playlist
+            "noplaylist": True,
+            # See youtubeDownloader::MyLogger inner class - Contains hook for updating status frame
+            "logger": self.MyLogger(self)
+        }
 
-        with youtube_dl.YoutubeDL({'quiet':True, "noplaylist":True, "age_limit":3,
-                                    "logger": self.MyLogger(self)})as ydl:
+        if self.playlistRangeVar.get():
+            try:
+                low = int(self.playlistLowerRangeVar.get())
+                high = int(self.playlistUpperRangeVar.get())
+                if low < 1 or high < 1:
+                    raise IndexError
+                youtubeOptions["playlist_items"] = str(low) + "-" + str(high)
+            except:
+                raise IndexError
+
+
+        with youtube_dl.YoutubeDL(youtubeOptions) as ydl:
             try:
                 result = ydl.extract_info \
                 (url,

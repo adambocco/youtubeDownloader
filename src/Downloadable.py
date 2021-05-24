@@ -284,7 +284,7 @@ class Downloadable:
         Downloadable.previewDownloadable = self
         url = self.stream.url if self.onlyAudio else self.previewStream.url
         if ffmpegOrMoviepy == "ffmpeg":
-            cmd = "ffplay "
+            cmd = resourcePath(FFPLAY_PATH) + " "
             if self.cut:
                 cmd += "-ss " + str(low)
                 cmd += " -t " + str(high) + " "
@@ -316,6 +316,12 @@ class Downloadable:
     
         eyed3File.tag.save()
         eyed3File.tag.save(version=eyed3.id3.ID3_V2_3)
+
+def resourcePath(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 
 
 def startPreview(onlyAudio, url, cut, low, high, volume):
