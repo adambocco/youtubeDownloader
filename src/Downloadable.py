@@ -289,7 +289,7 @@ class Downloadable:
                 cmd += "-ss " + str(low)
                 cmd += " -t " + str(high) + " "
             cmd += "-loglevel error "
-            cmd += self.stream.url
+            cmd += url
             Downloadable.previewThread = subprocess.Popen(cmd)
         elif ffmpegOrMoviepy == "moviepy":
             Downloadable.previewThread = multiprocessing.Process(target=startPreview, args=(self.onlyAudio, url, self.cut, low, high, newVolume))
@@ -352,10 +352,6 @@ def stopPreview():
         print("Preview thread trying to stop: ", Downloadable.previewThread)
     # try:
         Downloadable.previewThread.terminate()
-        Downloadable.previewThread.kill()
-        # os.kill(Downloadable.previewThread.pid, signal.SIGTERM)
-        os.kill(Downloadable.previewThread.pid, 0)
-        os.system("taskkill  /F /pid "+str(Downloadable.previewThread.pid))
 
         # except Exception as e:
         #     print("Error killing preview: ", e)

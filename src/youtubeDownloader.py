@@ -414,6 +414,7 @@ class App(Frame):
         lowH.grid(row=1, column=2, padx=2, pady=2)
         lowH.bind("<FocusOut>", self.handleCutEntry)
         lowH.bind("<Return>", self.handleCutEntry)
+        # lowH.bind("<Button-1>", self.handleCutEntry)
         
         labelM = Label(optionsFrame, text="M", bg=COLOR_MANIP_FRAME)
         labelM.grid(row=1, column=3)
@@ -421,6 +422,7 @@ class App(Frame):
         lowM.grid(row=1, column=4, padx=2, pady=2)
         lowH.bind("<FocusOut>", self.handleCutEntry)
         lowM.bind("<Return>", self.handleCutEntry)
+        # lowM.bind("<Button-1>", self.handleCutEntry)
 
         labelS = Label(optionsFrame, text="S", bg=COLOR_MANIP_FRAME)
         labelS.grid(row=1, column=5)
@@ -428,6 +430,7 @@ class App(Frame):
         lowS.grid(row=1, column=6, padx=2, pady=2)
         lowS.bind("<FocusOut>", self.handleCutEntry)
         lowS.bind("<Return>", self.handleCutEntry)
+        # lowS.bind("<Button-1>", self.handleCutEntry)
 
         labelTo = Label(optionsFrame, text="--TO--", bg=COLOR_MANIP_FRAME)
         labelTo.grid(row=1, column=7, padx=4, pady=2)
@@ -438,6 +441,7 @@ class App(Frame):
         highH.grid(row=1, column=9, padx=2, pady=2)
         highH.bind("<FocusOut>", self.handleCutEntry)
         highH.bind("<Return>", self.handleCutEntry)
+        # highH.bind("<Button-1>", self.handleCutEntry)
 
         labelM = Label(optionsFrame, text="M", bg=COLOR_MANIP_FRAME)
         labelM.grid(row=1, column=10)
@@ -445,6 +449,7 @@ class App(Frame):
         highM.grid(row=1, column=11, padx=2, pady=2)
         highM.bind("<FocusOut>", self.handleCutEntry)
         highM.bind("<Return>", self.handleCutEntry)
+        # highM.bind("<Button-1>", self.handleCutEntry)
 
         labelS = Label(optionsFrame, text="S", bg=COLOR_MANIP_FRAME)
         labelS.grid(row=1, column=12)
@@ -452,6 +457,8 @@ class App(Frame):
         highS.grid(row=1, column=13, padx=2, pady=2)
         highS.bind("<FocusOut>", self.handleCutEntry)
         highS.bind("<Return>", self.handleCutEntry)
+        # highS.bind("<Button-1>", self.handleCutEntry)
+
 
         if self.downloadable.cut:
             formattedCutInfo = self.formatCutInfo(self.downloadable.lowCut, self.downloadable.highCut, self.downloadable.length)
@@ -464,9 +471,11 @@ class App(Frame):
         addCutAsNewSongEntry = Entry(optionsFrame, textvariable=self.addCutAsNewSongVar, bg=COLOR_MANIP_ENTRY)
         addCutAsNewSongEntry.grid(row=4, column=1, columnspan=6)
         addCutAsNewSongEntry.bind("<Button-1>", self.clearAddCutAsNewSongEntry)
+        addCutAsNewSongEntry.bind("<Return>", self.addCutAsNewSong)
 
-        addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=self.addCutAsNewSong)
+        addCutAsNewSongButton = Button(optionsFrame, text="Copy Cut", font=FONT_MD, command=lambda:self.addCutAsNewSong(None))
         addCutAsNewSongButton.grid(row=5, column=1, columnspan=4)
+
 
         # BUTTON DISABLED:
         #   In order for the moviepy preview to work, we need to find why pyinstaller messes up the program
@@ -668,7 +677,7 @@ class App(Frame):
     def clearAddCutAsNewSongEntry(self, ev):
         self.addCutAsNewSongVar.set("")
 
-    def addCutAsNewSong(self):
+    def addCutAsNewSong(self, event):
         newName = self.addCutAsNewSongVar.get()
         newDisplayName = newName + " --- " + ("Audio" if self.downloadable.onlyAudio else "Video")
         if newDisplayName in self.downloadables.keys():
@@ -693,6 +702,7 @@ class App(Frame):
 
     def handleCutEntry(self, ev):
         self.cutSlider.moveBar()
+        self.makeCut(None)
 
 
     def applyVolumeMultiplier(self, event):
@@ -731,7 +741,7 @@ class App(Frame):
         if self.downloadable.changeCut(low, high):
             self.cutInfo['text'] = self.formatCutInfo(low, high, self.downloadable.length)
         else:
-            self.cutInfo['text'] = "Length: " + formatSeconds(self.downloadable.length) +"\n"
+            self.cutInfo['text'] = "Length: " + formatSeconds(self.downloadable.length)
 
     # Handle changing name 
     def changeName(self):
@@ -951,6 +961,7 @@ class App(Frame):
         # Check if user entered any URLS
         if not numDownloadables:                                                                       
             self.updateStatus("No urls provided", "red")
+            self.setLocked(False)
             return
 
         directory = fd.askdirectory()
@@ -958,6 +969,7 @@ class App(Frame):
         # If exited out of directory chooser without picking location, warn user
         if not directory:                                                                               
             self.updateStatus("No directory chosen", "red")
+            self.setLocked(False)
             return
         
         self.updateStatus("Downloading...", "blue")

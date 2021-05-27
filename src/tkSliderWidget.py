@@ -137,6 +137,8 @@ class Slider(Frame):
         highVarM.set(str(highM))
         highVarS.set(str(highS))
 
+        print("High Seconds: ",highS)
+
 
 
     def _moveBar(self, event):
